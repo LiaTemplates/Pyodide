@@ -124,6 +124,59 @@ import:  https://raw.githubusercontent.com/liaScript/pyodide_template/master/REA
 
 ## Implementation
 
-```js
+                                   --{{0}}--
+This macro implementation only adds a simple script-tag that pushes the code of
+your snippet directly to Pyodide. The `@onload` macro is required to instantiate
+Pyodide and load the required libraries, which might require some time, since
+the loaded packages might be quite large.
 
+
+```js
+script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.js
+
+@Pyodide.eval
+<script>
+if(window.pyodide_ready) {
+  pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
+  pyodide.runPython(`@input`);
+}
+else {
+  console.warn("Please wait, Pyodide is not ready yet...");
+  "LIA: stop";
+}
+</script>
+
+@end
+
+@onload
+window.pyodide_ready = false;
+
+languagePluginLoader.then(() => {
+  console.log("pyodide is ready")
+  if (window.py_packages) {
+    pyodide.loadPackage(window.py_packages).then(() => {
+      console.log("all packages loaded")
+      window.pyodide_ready = true;
+    });
+  }
+  else {
+    window.pyodide_ready = true;
+  }
+});
+var module = {};
+
+window.load_packages = function (list) {
+  window.py_packages = list;
+}
+
+@end
 ```
+
+                                   --{{1}}--
+If you want to minimize loading effort in your LiaScript project, you can also
+copy this code and paste it into your main comment header, see the code in the
+raw file of this document.
+
+
+                                     {{1}}
+https://raw.githubusercontent.com/liaScript/pyodide_template/master/README.md
