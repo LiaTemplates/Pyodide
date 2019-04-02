@@ -8,15 +8,19 @@ narrator: US English Female
 
 script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.js
 
-script:  https://aframe.io/releases/0.8.0/aframe.min.js
-
 @onload
+window.pyodide_ready = false;
+
 languagePluginLoader.then(() => {
   console.log("pyodide is ready")
   if (window.py_packages) {
     pyodide.loadPackage(window.py_packages).then(() => {
       console.log("all packages loaded")
+      window.pyodide_ready = true;
     });
+  }
+  else {
+    window.pyodide_ready = true;
   }
 });
 var module = {};
@@ -29,8 +33,14 @@ window.load_packages = function (list) {
 
 @Pyodide.eval
 <script>
-pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
-pyodide.runPython(`@input`);
+if(window.pyodide_ready) {
+  pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
+  pyodide.runPython(`@input`);
+}
+else {
+  console.warn("Please wait, Pyodide is not ready yet...");
+  "LIA: stop";
+}
 </script>
 
 @end
@@ -117,138 +127,3 @@ import:  https://raw.githubusercontent.com/liaScript/pyodide_template/master/REA
 ```js
 
 ```
-
-
-## webgl
-
-``` js
-var loader = new THREE.GLTFLoader()
-var scene = document.querySelector('a-scene').object3D; // THREE.Scene
-loader.load("https://devinbayly.github.io/host_brain/iodide.gltf",
-    //standard threejs gltf loading call
-    function(gltf) {
-        gltf.scene.position.z = -20
-        gltf.scene.rotation.y = (3.14 / 2)
-        scene.add(gltf.scene);
-    },
-    // called while loading is progressing
-    function(xhr) {
-
-        console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-
-    },
-    // called when loading has errors
-    function(error) {
-
-        console.log('An error happened');
-
-    }
-);
-
-var COM = {
-    gravity: 0.017,
-    position: new THREE.Vector3(0, 5, -20),
-    perturb: function() {
-        //purturb the objects within?
-    },
-    init: function() {
-        scene.add(this.mesh)
-    }
-}
-
-// orbit code courtesy of Tyler j Gabb
-function animate() {
-    requestAnimationFrame(animate);
-    orbiters.forEach(o => o.update());
-    //renderer.render(scene, camera);
-}
-
-let COMgeom = new THREE.SphereGeometry(1, 1, 1);
-let COMmat = new THREE.MeshBasicMaterial({
-    color: 0xFF0000
-});
-let COMmesh = new THREE.Mesh(COMgeom, COMmat);
-//scene.add(COMmesh);
-
-class Orbiter {
-    constructor() {
-        this.velocity = new THREE.Vector2(0.3 * Math.random()/100, 0.3 * Math.random()/100);
-        let geom = new THREE.SphereGeometry(.5, .5, .5);
-        let mat = new THREE.MeshBasicMaterial({
-            color: 0x0f97fa, //seagreen
-            //wireframe: true
-        });
-        this.mesh = new THREE.Mesh(geom, mat);
-        this.mesh.position.set(Math.random() * 10, Math.random() * 10, -20);
-        scene.add(this.mesh);
-    }
-
-    update() {
-        let acc = new THREE.Vector2(0, 0);
-        acc.subVectors(COM.position, this.mesh.position);
-        acc.normalize();
-        acc.multiplyScalar(COM.gravity);
-
-        let vel = new THREE.Vector2(0, 0);
-        vel.addVectors(this.velocity, acc);
-        if (vel.length() > 1) vel.setLength(1);
-        this.velocity.set(vel.x, vel.y);
-
-        let pos = new THREE.Vector2(0, 0);
-        pos.addVectors(this.mesh.position, this.velocity);
-        this.mesh.position.set(pos.x, pos.y, -20);
-    }
-}
-
-var orbiters = []
-for (let i = 0; i < 7; i++) {
-    orbiters.push(new Orbiter());
-}
-
-animate();
-
-function update(x, y) {
-    var ruler = new THREE.Vector2(0, 0);
-    ruler.subVectors(COM.position, new THREE.Vector2(x , y ));
-    COM.position.set(x , y );
-    COMmesh.position.set(x , y , -20);
-    //console.log(ruler.length());
-    if (ruler.length() > 5) setTimeout(() => calm(), 1000);
-}
-
-function increaseGravity() {
-    if (COM.gravity < 0.145) return COM.gravity += 0.01;
-    return COM.gravity;
-}
-
-function decreaseGravity() {
-    if (COM.gravity > 0.015) return COM.gravity -= 0.01;
-    return COM.gravity;
-}
-
-var calming = false;
-
-function calm() {
-    if (calming) return;
-    setTimeout(() => calming = false, 4000);
-    calming = true;
-    COM.gravity = 0.1;
-    for (let i = 1; i < 4; i++) {
-        setTimeout(() => decreaseGravity(), 1000 * i); //0.1, 0.09, 0.08, 0.07
-    }
-    COM.gravity = 0.07;
-}
-
-setInterval(()=> {
-  update(Math.random()*2,Math.random()*2)
-},2000)
-```
-<script>@input</script>
-
-
-<div>
-<a-scene embedded style="height:300px; width:100%">
-<a-sky color="black"></a-sky>
-
-</a-scene>
-</div>
