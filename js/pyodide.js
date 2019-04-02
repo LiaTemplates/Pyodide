@@ -6,7 +6,7 @@ var languagePluginLoader = new Promise((resolve, reject) => {
   // This is filled in by the Makefile to be either a local file or the
   // deployed location. TODO: This should be done in a less hacky
   // way.
-  var baseURL = self.languagePluginUrl || 'http://localhost:3333/templates/pyodide/js/';
+  var baseURL = self.languagePluginUrl || 'https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/';
   baseURL = baseURL.substr(0, baseURL.lastIndexOf('/')) + '/';
 
   ////////////////////////////////////////////////////////////

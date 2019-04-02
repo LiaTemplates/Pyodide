@@ -6,7 +6,7 @@ version:  0.0.1
 language: en
 narrator: US English Female
 
-script:  ./js/pyodide.js
+script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.js
 
 script:  https://aframe.io/releases/0.8.0/aframe.min.js
 
