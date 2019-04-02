@@ -6,7 +6,7 @@ version:  0.0.1
 language: en
 narrator: US English Female
 
-script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.js
+script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.min.js
 
 @onload
 window.pyodide_ready = false;
