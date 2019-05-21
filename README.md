@@ -6,7 +6,7 @@ version:  0.0.1
 language: en
 narrator: US English Female
 
-script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.min.js
+script:  https://cdn.jsdelivr.net/gh/LiaTemplates/pyodide/js/pyodide.min.js
 
 @onload
 window.pyodide_ready = false;
@@ -47,7 +47,7 @@ else {
 
 -->
 
-# Pyodide_template
+# Pyodide - Template
 
                                    --{{0}}--
 A template for executing Python code in [LiaScript](https://LiaScript.github.io)
@@ -58,11 +58,11 @@ more information.
 
 __Try it on LiaScript:__
 
-https://liascript.github.io/course/?https://raw.githubusercontent.com/liaScript/pyodide_template/master/README.md
+https://liascript.github.io/course/?https://raw.githubusercontent.com/LiaTemplates/pyodide/master/README.md
 
 __See the project on Github:__
 
-https://github.com/liaScript/pyodide_template
+https://github.com/LiaTemplates/pyodide
 
                                    --{{1}}--
 There are three ways to use this template. The easiest way is to use the
@@ -75,7 +75,7 @@ change it, as you wish.
                                      {{1}}
 1. Load the macros via
 
-   `import: https://raw.githubusercontent.com/liaScript/pyodide_template/master/README.md`
+   `import: https://raw.githubusercontent.com/LiaTemplates/pyodide/master/README.md`
 
 2. Copy the definitions into your Project
 
@@ -132,7 +132,7 @@ the loaded packages might be quite large.
 
 
 ```js
-script:  https://cdn.jsdelivr.net/gh/LiaScript/pyodide_template/js/pyodide.js
+script:  https://cdn.jsdelivr.net/gh/LiaTemplates/pyodide/js/pyodide.js
 
 @Pyodide.eval
 <script>
@@ -179,4 +179,4 @@ raw file of this document.
 
 
                                      {{1}}
-https://raw.githubusercontent.com/liaScript/pyodide_template/master/README.md
+https://raw.githubusercontent.com/LiaTemplates/pyodide/master/README.md
