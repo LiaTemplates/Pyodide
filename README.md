@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    andre.dietrich@ovgu.de
-version:  0.0.2
+version:  0.0.3
 language: en
 narrator: US English Male
 
@@ -26,10 +26,6 @@ languagePluginLoader.then(() => {
   }
 });
 var module = {};
-
-window.load_packages = function (list) {
-  window.py_packages = list;
-}
 
 @end
 
@@ -116,7 +112,7 @@ email:   ...
 
 import:  https://github.com/LiaTemplates/Pyodide
 
-@onload: load_packages(["matplotlib", "numpy"]);
+@onload: window.py_packages = ["matplotlib", "numpy"]
 -->
 ...
 ```
@@ -154,10 +150,6 @@ languagePluginLoader.then(() => {
   }
 });
 var module = {};
-
-window.load_packages = function (list) {
-  window.py_packages = list;
-}
 
 @end
 
