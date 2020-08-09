@@ -2,13 +2,15 @@
 
 author:   André Dietrich
 email:    andre.dietrich@ovgu.de
-version:  0.0.1
+version:  0.0.2
 language: en
-narrator: US English Female
+narrator: US English Male
 
-script:  https://cdn.jsdelivr.net/gh/LiaTemplates/pyodide/js/pyodide.min.js
+script:  https://pyodide-cdn2.iodide.io/v0.15.0/full/pyodide.js
 
 @onload
+window.languagePluginUrl = 'https://pyodide-cdn2.iodide.io/v0.15.0/full/'
+
 window.pyodide_ready = false;
 
 languagePluginLoader.then(() => {
@@ -58,7 +60,7 @@ more information.
 
 __Try it on LiaScript:__
 
-https://liascript.github.io/course/?https://raw.githubusercontent.com/LiaTemplates/pyodide/master/README.md
+https://liascript.github.io/course/?https://github.com/LiaTemplates/pyodide
 
 __See the project on Github:__
 
@@ -75,7 +77,7 @@ change it, as you wish.
                                      {{1}}
 1. Load the macros via
 
-   `import: https://raw.githubusercontent.com/LiaTemplates/pyodide/master/README.md`
+   `import: https://github.com/LiaTemplates/Pyodide`
 
 2. Copy the definitions into your Project
 
@@ -97,6 +99,7 @@ sys.version
 ```
 @Pyodide.eval
 
+
 ## Loading Libraries
 
                                    --{{0}}--
@@ -111,16 +114,15 @@ with an array of all required Python libraries.
 author:  ...
 email:   ...
 
-import:  https://raw.githubusercontent.com/liaScript/pyodide_template/master/README.md
+import:  https://github.com/LiaTemplates/Pyodide
 
 @onload: load_packages(["matplotlib", "numpy"]);
 -->
 ...
 ```
 
-> __Note:__ `scipy` is currently not available, due to memory restrictions at
->            github, which does not allow to upload files larger than 100 MB.
-
+> __Note:__ loading large packages such as `scipy` may take some time, since
+>           they might require to download many MB of precompiled packages.
 
 ## Implementation
 
@@ -132,23 +134,11 @@ the loaded packages might be quite large.
 
 
 ```js
-script:  https://cdn.jsdelivr.net/gh/LiaTemplates/pyodide/js/pyodide.js
-
-@Pyodide.eval
-<script>
-if(window.pyodide_ready) {
-  pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
-  pyodide.runPython(`@input`);
-}
-else {
-  console.warn("Please wait, Pyodide is not ready yet...");
-  "LIA: stop";
-}
-</script>
-
-@end
+script:  https://pyodide-cdn2.iodide.io/v0.15.0/full/pyodide.js
 
 @onload
+window.languagePluginUrl = 'https://pyodide-cdn2.iodide.io/v0.15.0/full/'
+
 window.pyodide_ready = false;
 
 languagePluginLoader.then(() => {
@@ -168,6 +158,20 @@ var module = {};
 window.load_packages = function (list) {
   window.py_packages = list;
 }
+
+@end
+
+@Pyodide.eval
+<script>
+if(window.pyodide_ready) {
+  pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
+  pyodide.runPython(`@input`);
+}
+else {
+  console.warn("Please wait, Pyodide is not ready yet...");
+  "LIA: stop";
+}
+</script>
 
 @end
 ```
