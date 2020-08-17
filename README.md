@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.1.1
+version:  0.1.2
 language: en
 narrator: US English Male
 
@@ -190,7 +190,7 @@ directly into the header of your Markdown document, see therefor the
 change it, as you wish.
 
                                      {{1}}
---------------------------------------------------------------------------------
+********************************************************************************
 
 1. Load the macros via
 
@@ -200,7 +200,7 @@ change it, as you wish.
 
 3. Clone this repository on GitHub
 
---------------------------------------------------------------------------------
+********************************************************************************
 
 ## `@Pyodide.eval`
 
