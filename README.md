@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.1.0
+version:  0.1.1
 language: en
 narrator: US English Male
 
@@ -173,6 +173,10 @@ __Try it on LiaScript:__
 
 https://liascript.github.io/course/?https://github.com/LiaTemplates/pyodide
 
+
+![demo](demo.gif)<!-- style="display:none" -->
+
+
 __See the project on Github:__
 
 https://github.com/LiaTemplates/pyodide
@@ -186,6 +190,8 @@ directly into the header of your Markdown document, see therefor the
 change it, as you wish.
 
                                      {{1}}
+--------------------------------------------------------------------------------
+
 1. Load the macros via
 
    `import: https://github.com/LiaTemplates/Pyodide`
@@ -193,6 +199,8 @@ change it, as you wish.
 2. Copy the definitions into your Project
 
 3. Clone this repository on GitHub
+
+--------------------------------------------------------------------------------
 
 ## `@Pyodide.eval`
 
