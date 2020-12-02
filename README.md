@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.1.2
+version:  0.1.3
 language: en
 narrator: US English Male
 
@@ -134,6 +134,12 @@ function runPython() {
           send.lia("LIA: stop")
         }
       }
+
+      try{
+        if ( pyodide.globals.img_str_["plot-@0"] )
+        document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
+        document.getElementById("plot-@0").parentElement.style = ""
+      } catch(e) {}
     }, 100)
   } else {
     setTimeout(runPython, 234)
@@ -145,16 +151,8 @@ runPython()
 "LIA: wait";
 </script>
 
-<div id="pyplotdiv" style="display:none"><img id="plot-@0" /></div>
+<div id="pyplotdiv"><img id="plot-@0" /></div>
 
-<script>
-try {
-if ( pyodide.globals.img_str_["plot-@0"] )
-  document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-  document.getElementById("plot-@0").parentElement.style = ""
-} catch(e) {}
-
-</script>
 
 @end
 
