@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.1.3
+version:  0.1.4
 language: en
 narrator: US English Male
 
@@ -76,8 +76,11 @@ def plot(fig, id="plot-@0"):
 
 function copyPlot() {
   if ( pyodide.globals.img_str_["plot-@0"] ) {
-    document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-    document.getElementById("plot-@0").parentElement.style = ""
+    //document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
+    //document.getElementById("plot-@0").parentElement.style = ""
+
+    console.html("<hr/>")
+    console.html("<img src='" + pyodide.globals.img_str_["plot-@0"] + "' onclick='window.img_Click(\"" + pyodide.globals.img_str_["plot-@0"] + "\")'>")
   }
 }
 
@@ -134,12 +137,6 @@ function runPython() {
           send.lia("LIA: stop")
         }
       }
-
-      try{
-        if ( pyodide.globals.img_str_["plot-@0"] )
-        document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-        document.getElementById("plot-@0").parentElement.style = ""
-      } catch(e) {}
     }, 100)
   } else {
     setTimeout(runPython, 234)
@@ -150,9 +147,6 @@ runPython()
 
 "LIA: wait";
 </script>
-
-<div id="pyplotdiv"><img id="plot-@0" /></div>
-
 
 @end
 
@@ -344,8 +338,11 @@ def plot(fig, id="plot-@0"):
 
 function copyPlot() {
   if ( pyodide.globals.img_str_["plot-@0"] ) {
-    document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-    document.getElementById("plot-@0").parentElement.style = ""
+    //document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
+    //document.getElementById("plot-@0").parentElement.style = ""
+
+    console.html("<hr/>")
+    console.html("<img src='" + pyodide.globals.img_str_["plot-@0"] + "' onclick='window.img_Click(\"" + pyodide.globals.img_str_["plot-@0"] + "\")'>")
   }
 }
 
@@ -411,17 +408,6 @@ function runPython() {
 runPython()
 
 "LIA: wait";
-</script>
-
-<div id="pyplotdiv" style="display:none"><img id="plot-@0" /></div>
-
-<script>
-try {
-if ( pyodide.globals.img_str_["plot-@0"] )
-  document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-  document.getElementById("plot-@0").parentElement.style = ""
-} catch(e) {}
-
 </script>
 
 @end
