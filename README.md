@@ -13,10 +13,9 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
-script:   https://pyodide-cdn2.iodide.io/v0.15.0/full/pyodide.js
+script:   ./pyiodide.js
 
 @onload
-window.languagePluginUrl = 'https://pyodide-cdn2.iodide.io/v0.15.0/full/'
 
 window.pyodide_ready = false;
 
@@ -26,6 +25,7 @@ window.pyodide_modules = new Set()
 
 window.loadModules = function() {
   languagePluginLoader.then(() => {
+
     console.log("pyodide is ready")
     if (window.py_packages) {
 
@@ -163,7 +163,7 @@ more information.
 
 __Try it on LiaScript:__
 
-https://liascript.github.io/course/?https://github.com/LiaTemplates/pyodide
+https://liascript.github.io/course/?https://raw.githubusercontent.com/LiaTemplates/Pyodide/master/README.md
 
 
 ![demo](demo.gif)<!-- style="display:none" -->
@@ -186,7 +186,7 @@ change it, as you wish.
 
 1. Load the macros via
 
-   `import: https://github.com/LiaTemplates/Pyodide`
+   `import: https://raw.githubusercontent.com/LiaTemplates/Pyodide/master/README.md`
 
 2. Copy the definitions into your Project
 
