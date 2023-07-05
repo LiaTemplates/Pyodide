@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.1.5
+version:  0.1.6
 language: en
 narrator: US English Male
 
@@ -13,7 +13,7 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
-script:   ./pyiodide.js
+script:   pyiodide.js
 
 @onload
 
