@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.2.0
+version:  0.2.1
 language: en
 narrator: US English Male
 
@@ -54,7 +54,7 @@ async function run(code) {
           return prompt("stdin")
         }}) 
        
-        const rslt = await window._py.runPython(code, {})
+        const rslt = await window._py.runPython(code)
 
         if (typeof rslt === 'string') {
             send.lia(rslt)
