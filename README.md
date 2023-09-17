@@ -2,10 +2,9 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.1.7
+version:  0.2.0
 language: en
 narrator: US English Male
-
 
 logo:     logo.jpg
 
@@ -13,141 +12,108 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
-script:   https://liatemplates.github.io/Pyodide/pyiodide.js
-
-@onload
-
-window.pyodide_ready = false;
-
-window.pyodide_modules = new Set()
-
-// window.py_packages = ["matplotlib", "numpy"]
-
-window.loadModules = function() {
-  languagePluginLoader.then(() => {
-
-    console.log("pyodide is ready")
-    if (window.py_packages) {
-
-      for( let i = 0; i < window.py_packages.length; i++ ) {
-        window.pyodide_modules.add(window.py_packages[i])
-      }
-
-      pyodide.loadPackage(window.py_packages).then(() => {
-        console.log("all packages loaded")
-        window.pyodide_ready = true;
-      });
-    }
-    else {
-      window.pyodide_ready = true;
-    }
-  })
-}
-
-window.loadModules()
-
-@end
-
+script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 
 @Pyodide.eval: @Pyodide.eval_(@uid)
 
 @Pyodide.eval_
 <script>
+async function run(code) {
 
-function initPlot() {
-try {
+    const plot = document.getElementById('target_@0')
+    plot.innerHTML = ""
+    document.pyodideMplTarget = plot
 
-pyodide.runPython(`
-import io, base64
-
-try:
-  img_str_
-except NameError:
-  img_str_ = {}
-
-def plot(fig, id="plot-@0"):
-  buf = io.BytesIO()
-  fig.savefig(buf, format='png')
-  buf.seek(0)
-  img_str_[id] = "data:image/png;base64," + base64.b64encode(buf.read()).decode('UTF-8')
-`)
-} catch (e) {}
-}
-
-function copyPlot() {
-  if ( pyodide.globals.img_str_["plot-@0"] ) {
-    //document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-    //document.getElementById("plot-@0").parentElement.style = ""
-
-    console.html("<hr/>")
-    console.html("<img src='" + pyodide.globals.img_str_["plot-@0"] + "' onclick='window.img_Click(\"" + pyodide.globals.img_str_["plot-@0"] + "\")'>")
-  }
-}
-
-////////////////////////////////////////////////////
-
-function runPython() {
-  if (window.pyodide_ready) {
-    pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
-
-    setTimeout(() => {
-
-      try {
-        initPlot()
-
-        let fin = pyodide.runPython(`@input`)
-        if (fin) {
-          console.log(fin)
-        }
-
-        copyPlot()
-
-        send.lia("LIA: stop")
-      } catch(e) {
-        //window.py_packages = ["matplotlib"]
-
-        let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/g)
-
-        if (! module) {
-          console.error(e)
-          //let msg = e.message.match(/File "<unknown>", line (\d+)\n.*\n.*\n.*/g)
-
-          //window.console.log(msg[0])
-
-          send.lia("LIA: stop")
-        }
-        else if (module.length != 0) {
-          module = module[0].split("'")[1]
-
-          if (window.pyodide_modules.has(module)) {
-            console.error(e)
-
+    if (!window._py) {
+        try {
+            window._py = await loadPyodide({fullStdLib: false})
+            window._py_modules = []
+            window._py_running = true
+        } catch(e) {
+            console.error(e.message)
             send.lia("LIA: stop")
-          } else {
-            console.debug("downloading module =>", module)
-            window.py_packages = [ module ]
-            window.pyodide_ready = false
-            window.loadModules()
-            runPython()
-          }
         }
-        else {
-          console.error(e)
+    }
 
-          send.lia("LIA: stop")
+    try {
+        window._py.setStdout({ write: (buffer) => {
+            const decoder = new TextDecoder()
+            const string = decoder.decode(buffer)
+            console.stream(string)
+            return buffer.length
+        }})
+
+        window._py.setStderr({ write: (buffer) => {
+            const decoder = new TextDecoder()
+            const string = decoder.decode(buffer)
+            console.err(string)
+            return buffer.length
+        }})
+
+        window._py.setStdin({stdin: () => {
+          return prompt("stdin")
+        }}) 
+       
+        const rslt = await window._py.runPython(code, {})
+
+        if (typeof rslt === 'string') {
+            send.lia(rslt)
         }
-      }
-    }, 100)
-  } else {
-    setTimeout(runPython, 234)
-  }
+    } catch(e) {
+        let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+
+        window.console.warn("Pyodide", e.message)
+    
+        if (!module) {
+            const err = e.message.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i)
+
+            if (err!== null && err.length >= 3) {
+                send.lia( e.message,
+                  [[{ row : parseInt(err[1]) - 1,
+                      column : 1,
+                      text : err[2],
+                      type : "error"
+                  }]],
+                  false)
+            } else {
+                console.error(e.message)
+            }
+        } else {
+            if (module.length > 1) {
+                module = module[1]
+
+                if (window._py_modules.includes(module)) {
+                    console.error(e.message)
+                } else {
+                    console.debug("downloading module =>", module)
+                    window._py_modules.push(module)
+                    await window._py.loadPackage(module)
+                    await run(code)
+                }
+            }
+        }
+    }
+    send.lia("LIA: stop")
+    window._py_running = false
 }
 
-runPython()
+if (window._py_running) {
+  setTimeout(() => {
+    console.warn("Another process is running, wait until finished")
+  }, 500)
+  "LIA: stop"
+} else {
+  window._py_running = true
 
-"LIA: wait";
+  setTimeout(() => {
+    run(`@input`)
+  }, 500)
+
+  "LIA: wait"
+}
 </script>
 
+<div id="target_@0"></div>
 @end
 
 -->
@@ -231,14 +197,19 @@ ax.grid(True, linestyle='-.')
 ax.tick_params(labelcolor='r', labelsize='medium', width=3)
 
 plt.show()
-
-plot(fig) # <- this is required to plot the fig also on the LiaScript canvas
 ```
 @Pyodide.eval
 
-> For more information see the following
-> [codepen-example](https://codepen.io/aagostini/pen/LYExVJL?editors=1000), it
-> shows basically how you can add further images.
+
+``` python
+import pandas as pd
+d = {'col1': [1, 5, 7], 'col2': [3, .4, -2], 'col3':["yes", "no","blue"]};
+df = pd.DataFrame(data=d);
+df
+print(df)
+```
+@Pyodide.eval
+
 
 
 ## Loading Libraries
@@ -275,141 +246,108 @@ the loaded packages might be quite large.
 
 
 ```js
-script:   https://pyodide-cdn2.iodide.io/v0.15.0/full/pyodide.js
-
-@onload
-window.languagePluginUrl = 'https://pyodide-cdn2.iodide.io/v0.15.0/full/'
-
-window.pyodide_ready = false;
-
-window.pyodide_modules = new Set()
-
-// window.py_packages = ["matplotlib", "numpy"]
-
-window.loadModules = function() {
-  languagePluginLoader.then(() => {
-    console.log("pyodide is ready")
-    if (window.py_packages) {
-
-      for( let i = 0; i < window.py_packages.length; i++ ) {
-        window.pyodide_modules.add(window.py_packages[i])
-      }
-
-      pyodide.loadPackage(window.py_packages).then(() => {
-        console.log("all packages loaded")
-        window.pyodide_ready = true;
-      });
-    }
-    else {
-      window.pyodide_ready = true;
-    }
-  })
-}
-
-window.loadModules()
-
-@end
-
+script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 
 @Pyodide.eval: @Pyodide.eval_(@uid)
 
 @Pyodide.eval_
 <script>
+async function run(code) {
 
-function initPlot() {
-try {
+    const plot = document.getElementById('target_@0')
+    plot.innerHTML = ""
+    document.pyodideMplTarget = plot
 
-pyodide.runPython(`
-import io, base64
-
-try:
-  img_str_
-except NameError:
-  img_str_ = {}
-
-def plot(fig, id="plot-@0"):
-  buf = io.BytesIO()
-  fig.savefig(buf, format='png')
-  buf.seek(0)
-  img_str_[id] = "data:image/png;base64," + base64.b64encode(buf.read()).decode('UTF-8')
-`)
-} catch (e) {}
-}
-
-function copyPlot() {
-  if ( pyodide.globals.img_str_["plot-@0"] ) {
-    //document.getElementById("plot-@0").src = pyodide.globals.img_str_["plot-@0"]
-    //document.getElementById("plot-@0").parentElement.style = ""
-
-    console.html("<hr/>")
-    console.html("<img src='" + pyodide.globals.img_str_["plot-@0"] + "' onclick='window.img_Click(\"" + pyodide.globals.img_str_["plot-@0"] + "\")'>")
-  }
-}
-
-////////////////////////////////////////////////////
-
-function runPython() {
-  if (window.pyodide_ready) {
-    pyodide.globals.print = (...e) => { e = e.slice(0,-1); console.log(...e) };
-
-    setTimeout(() => {
-
-      try {
-        initPlot()
-
-        let fin = pyodide.runPython(`@input`)
-        if (fin) {
-          console.log(fin)
-        }
-
-        copyPlot()
-
-        send.lia("LIA: stop")
-      } catch(e) {
-        //window.py_packages = ["matplotlib"]
-
-        let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/g)
-
-        if (! module) {
-          console.error(e)
-          //let msg = e.message.match(/File "<unknown>", line (\d+)\n.*\n.*\n.*/g)
-
-          //window.console.log(msg[0])
-
-          send.lia("LIA: stop")
-        }
-        else if (module.length != 0) {
-          module = module[0].split("'")[1]
-
-          if (window.pyodide_modules.has(module)) {
-            console.error(e)
-
+    if (!window._py) {
+        try {
+            window._py = await loadPyodide({fullStdLib: false})
+            window._py_modules = []
+            window._py_running = true
+        } catch(e) {
+            console.error(e.message)
             send.lia("LIA: stop")
-          } else {
-            console.debug("downloading module =>", module)
-            window.py_packages = [ module ]
-            window.pyodide_ready = false
-            window.loadModules()
-            runPython()
-          }
         }
-        else {
-          console.error(e)
+    }
 
-          send.lia("LIA: stop")
+    try {
+        window._py.setStdout({ write: (buffer) => {
+            const decoder = new TextDecoder()
+            const string = decoder.decode(buffer)
+            console.stream(string)
+            return buffer.length
+        }})
+
+        window._py.setStderr({ write: (buffer) => {
+            const decoder = new TextDecoder()
+            const string = decoder.decode(buffer)
+            console.err(string)
+            return buffer.length
+        }})
+
+        window._py.setStdin({stdin: () => {
+          return prompt("stdin")
+        }}) 
+       
+        const rslt = await window._py.runPython(code, {})
+
+        if (typeof rslt === 'string') {
+            send.lia(rslt)
         }
-      }
-    }, 100)
-  } else {
-    setTimeout(runPython, 234)
-  }
+    } catch(e) {
+        let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+
+        window.console.warn("Pyodide", e.message)
+    
+        if (!module) {
+            const err = e.message.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i)
+
+            if (err!== null && err.length >= 3) {
+                send.lia( e.message,
+                  [[{ row : parseInt(err[1]) - 1,
+                      column : 1,
+                      text : err[2],
+                      type : "error"
+                  }]],
+                  false)
+            } else {
+                console.error(e.message)
+            }
+        } else {
+            if (module.length > 1) {
+                module = module[1]
+
+                if (window._py_modules.includes(module)) {
+                    console.error(e.message)
+                } else {
+                    console.debug("downloading module =>", module)
+                    window._py_modules.push(module)
+                    await window._py.loadPackage(module)
+                    await run(code)
+                }
+            }
+        }
+    }
+    send.lia("LIA: stop")
+    window._py_running = false
 }
 
-runPython()
+if (window._py_running) {
+  setTimeout(() => {
+    console.warn("Another process is running, wait until finished")
+  }, 500)
+  "LIA: stop"
+} else {
+  window._py_running = true
 
-"LIA: wait";
+  setTimeout(() => {
+    run(`@input`)
+  }, 500)
+
+  "LIA: wait"
+}
 </script>
 
+<div id="target_@0"></div>
 @end
 ```
 
