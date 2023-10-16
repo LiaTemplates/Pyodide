@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.3.0
+version:  0.3.1
 language: en
 narrator: US English Male
 
@@ -358,7 +358,7 @@ Pyodide and load the required libraries, which might require some time, since
 the loaded packages might be quite large.
 
 
-```js
+```` js
 script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 
 @Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
@@ -541,7 +541,7 @@ if (window._py_running) {
 
 <div id="target_@0"></div>
 @end
-```
+````
 
                                    --{{1}}--
 If you want to minimize loading effort in your LiaScript project, you can also
