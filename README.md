@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.3.1
+version:  0.3.2
 language: en
 narrator: US English Male
 
@@ -20,18 +20,18 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 @Pyodide.exec_
 <script>
 async function run(code, force=false) {
-    if (!window._py_running || force) {
-        window._py_running = true
+    if (!window.pyodide_running || force) {
+        window.pyodide_running = true
     
         const plot = document.getElementById('target_@0')
         plot.innerHTML = ""
         document.pyodideMplTarget = plot
 
-        if (!window._py) {
+        if (!window.pyodide) {
             try {
-                window._py = await loadPyodide({fullStdLib: false})
-                window._py_modules = []
-                window._py_running = true
+                window.pyodide = await loadPyodide({fullStdLib: false})
+                window.pyodide_modules = []
+                window.pyodide_running = true
             } catch(e) {
                 send.lia(e.message, false)
                 send.lia("LIA: stop")
@@ -39,14 +39,14 @@ async function run(code, force=false) {
         }
 
         try {
-            window._py.setStdout((text) => console.log(text))
-            window._py.setStderr((text) => console.err(text))
+            window.pyodide.setStdout((text) => console.log(text))
+            window.pyodide.setStderr((text) => console.err(text))
 
-            window._py.setStdin({stdin: () => {
+            window.pyodide.setStdin({stdin: () => {
             return prompt("stdin")
             }})
         
-            const rslt = await window._py.runPython(code)
+            const rslt = await window.pyodide.runPython(code)
             
             if (rslt !== undefined) {
                 send.lia(rslt)
@@ -65,20 +65,20 @@ async function run(code, force=false) {
                 if (module.length > 1) {
                     module = module[1]
 
-                    if (window._py_modules.includes(module)) {
+                    if (window.pyodide_modules.includes(module)) {
                         console.warn(e.message)
                         send.lia(e.message, false)
                     } else {
                         send.lia("downloading module => " + module)
-                        window._py_modules.push(module)
-                        await window._py.loadPackage(module)
+                        window.pyodide_modules.push(module)
+                        await window.pyodide.loadPackage(module)
                         await run(code, true)
                     }
                 }
             }
         }
         send.lia("LIA: stop")
-        window._py_running = false
+        window.pyodide_running = false
     } else {
         setTimeout(() => { run(code) }, 1000)
     }
@@ -107,11 +107,11 @@ async function run(code) {
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
 
-    if (!window._py) {
+    if (!window.pyodide) {
         try {
-            window._py = await loadPyodide({fullStdLib: false})
-            window._py_modules = []
-            window._py_running = true
+            window.pyodide = await loadPyodide({fullStdLib: false})
+            window.pyodide_modules = []
+            window.pyodide_running = true
         } catch(e) {
             console.error(e.message)
             send.lia("LIA: stop")
@@ -119,25 +119,25 @@ async function run(code) {
     }
 
     try {
-        window._py.setStdout({ write: (buffer) => {
+        window.pyodide.setStdout({ write: (buffer) => {
             const decoder = new TextDecoder()
             const string = decoder.decode(buffer)
             console.stream(string)
             return buffer.length
         }})
 
-        window._py.setStderr({ write: (buffer) => {
+        window.pyodide.setStderr({ write: (buffer) => {
             const decoder = new TextDecoder()
             const string = decoder.decode(buffer)
             console.err(string)
             return buffer.length
         }})
 
-        window._py.setStdin({stdin: () => {
+        window.pyodide.setStdin({stdin: () => {
           return prompt("stdin")
         }}) 
        
-        const rslt = await window._py.runPython(code)
+        const rslt = await window.pyodide.runPython(code)
 
         if (typeof rslt === 'string') {
             send.lia(rslt)
@@ -165,28 +165,28 @@ async function run(code) {
             if (module.length > 1) {
                 module = module[1]
 
-                if (window._py_modules.includes(module)) {
+                if (window.pyodide_modules.includes(module)) {
                     console.error(e.message)
                 } else {
                     console.debug("downloading module =>", module)
-                    window._py_modules.push(module)
-                    await window._py.loadPackage(module)
+                    window.pyodide_modules.push(module)
+                    await window.pyodide.loadPackage(module)
                     await run(code)
                 }
             }
         }
     }
     send.lia("LIA: stop")
-    window._py_running = false
+    window.pyodide_running = false
 }
 
-if (window._py_running) {
+if (window.pyodide_running) {
   setTimeout(() => {
     console.warn("Another process is running, wait until finished")
   }, 500)
   "LIA: stop"
 } else {
-  window._py_running = true
+  window.pyodide_running = true
 
   setTimeout(() => {
     run(`@input`)
@@ -366,18 +366,18 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 @Pyodide.exec_
 <script>
 async function run(code, force=false) {
-    if (!window._py_running || force) {
-        window._py_running = true
+    if (!window.pyodide_running || force) {
+        window.pyodide_running = true
     
         const plot = document.getElementById('target_@0')
         plot.innerHTML = ""
         document.pyodideMplTarget = plot
 
-        if (!window._py) {
+        if (!window.pyodide) {
             try {
-                window._py = await loadPyodide({fullStdLib: false})
-                window._py_modules = []
-                window._py_running = true
+                window.pyodide = await loadPyodide({fullStdLib: false})
+                window.pyodide_modules = []
+                window.pyodide_running = true
             } catch(e) {
                 send.lia(e.message, false)
                 send.lia("LIA: stop")
@@ -385,14 +385,14 @@ async function run(code, force=false) {
         }
 
         try {
-            window._py.setStdout((text) => console.log(text))
-            window._py.setStderr((text) => console.err(text))
+            window.pyodide.setStdout((text) => console.log(text))
+            window.pyodide.setStderr((text) => console.err(text))
 
-            window._py.setStdin({stdin: () => {
+            window.pyodide.setStdin({stdin: () => {
             return prompt("stdin")
             }})
         
-            const rslt = await window._py.runPython(code)
+            const rslt = await window.pyodide.runPython(code)
             
             if (rslt !== undefined) {
                 send.lia(rslt)
@@ -411,20 +411,20 @@ async function run(code, force=false) {
                 if (module.length > 1) {
                     module = module[1]
 
-                    if (window._py_modules.includes(module)) {
+                    if (window.pyodide_modules.includes(module)) {
                         console.warn(e.message)
                         send.lia(e.message, false)
                     } else {
                         send.lia("downloading module => " + module)
-                        window._py_modules.push(module)
-                        await window._py.loadPackage(module)
+                        window.pyodide_modules.push(module)
+                        await window.pyodide.loadPackage(module)
                         await run(code, true)
                     }
                 }
             }
         }
         send.lia("LIA: stop")
-        window._py_running = false
+        window.pyodide_running = false
     } else {
         setTimeout(() => { run(code) }, 1000)
     }
@@ -450,11 +450,11 @@ async function run(code) {
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
 
-    if (!window._py) {
+    if (!window.pyodide) {
         try {
-            window._py = await loadPyodide({fullStdLib: false})
-            window._py_modules = []
-            window._py_running = true
+            window.pyodide = await loadPyodide({fullStdLib: false})
+            window.pyodide_modules = []
+            window.pyodide_running = true
         } catch(e) {
             console.error(e.message)
             send.lia("LIA: stop")
@@ -462,25 +462,25 @@ async function run(code) {
     }
 
     try {
-        window._py.setStdout({ write: (buffer) => {
+        window.pyodide.setStdout({ write: (buffer) => {
             const decoder = new TextDecoder()
             const string = decoder.decode(buffer)
             console.stream(string)
             return buffer.length
         }})
 
-        window._py.setStderr({ write: (buffer) => {
+        window.pyodide.setStderr({ write: (buffer) => {
             const decoder = new TextDecoder()
             const string = decoder.decode(buffer)
             console.err(string)
             return buffer.length
         }})
 
-        window._py.setStdin({stdin: () => {
+        window.pyodide.setStdin({stdin: () => {
           return prompt("stdin")
         }}) 
        
-        const rslt = await window._py.runPython(code)
+        const rslt = await window.pyodide.runPython(code)
 
         if (typeof rslt === 'string') {
             send.lia(rslt)
@@ -508,28 +508,28 @@ async function run(code) {
             if (module.length > 1) {
                 module = module[1]
 
-                if (window._py_modules.includes(module)) {
+                if (window.pyodide_modules.includes(module)) {
                     console.error(e.message)
                 } else {
                     console.debug("downloading module =>", module)
-                    window._py_modules.push(module)
-                    await window._py.loadPackage(module)
+                    window.pyodide_modules.push(module)
+                    await window.pyodide.loadPackage(module)
                     await run(code)
                 }
             }
         }
     }
     send.lia("LIA: stop")
-    window._py_running = false
+    window.pyodide_running = false
 }
 
-if (window._py_running) {
+if (window.pyodide_running) {
   setTimeout(() => {
     console.warn("Another process is running, wait until finished")
   }, 500)
   "LIA: stop"
 } else {
-  window._py_running = true
+  window.pyodide_running = true
 
   setTimeout(() => {
     run(`@input`)
