@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.2.1
+version:  0.3.0
 language: en
 narrator: US English Male
 
@@ -13,6 +13,89 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
 script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
+
+
+@Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
+
+@Pyodide.exec_
+<script>
+async function run(code, force=false) {
+    if (!window._py_running || force) {
+        window._py_running = true
+    
+        const plot = document.getElementById('target_@0')
+        plot.innerHTML = ""
+        document.pyodideMplTarget = plot
+
+        if (!window._py) {
+            try {
+                window._py = await loadPyodide({fullStdLib: false})
+                window._py_modules = []
+                window._py_running = true
+            } catch(e) {
+                send.lia(e.message, false)
+                send.lia("LIA: stop")
+            }
+        }
+
+        try {
+            window._py.setStdout((text) => console.log(text))
+            window._py.setStderr((text) => console.err(text))
+
+            window._py.setStdin({stdin: () => {
+            return prompt("stdin")
+            }})
+        
+            const rslt = await window._py.runPython(code)
+            
+            if (rslt !== undefined) {
+                send.lia(rslt)
+            } else {
+                send.lia("")
+            }
+        } catch(e) {
+            let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+
+            window.console.warn("Pyodide", e.message)
+        
+            if (!module) {
+                send.lia(e.message, false)
+            
+            } else {
+                if (module.length > 1) {
+                    module = module[1]
+
+                    if (window._py_modules.includes(module)) {
+                        console.warn(e.message)
+                        send.lia(e.message, false)
+                    } else {
+                        send.lia("downloading module => " + module)
+                        window._py_modules.push(module)
+                        await window._py.loadPackage(module)
+                        await run(code, true)
+                    }
+                }
+            }
+        }
+        send.lia("LIA: stop")
+        window._py_running = false
+    } else {
+        setTimeout(() => { run(code) }, 1000)
+    }
+}
+
+setTimeout(() => { run(`@1`) }, 500)
+
+"calculating, please wait ..."
+
+</script>
+
+<div id="target_@0"></div>
+@end
+
+
+
+
 
 @Pyodide.eval: @Pyodide.eval_(@uid)
 
@@ -211,6 +294,36 @@ print(df)
 @Pyodide.eval
 
 
+## `@Pyodide.exec`
+
+This macro works similar to the previous one, but the code is only passed as a parameter.
+The user will only see the result and will not have the chance to directly modify the the Python code.
+
+```python   @Pyodide.exec
+import sys
+
+for i in range(5):
+	print("Hello", 'World #', i)
+
+sys.version
+```
+
+
+```python   @Pyodide.exec
+import numpy as np
+import matplotlib.pyplot as plt
+
+t = np.arange(0.0, 2.0, 0.01)
+s = np.sin(2 * np.pi * t)
+
+fig, ax = plt.subplots()
+ax.plot(t, s)
+
+ax.grid(True, linestyle='-.')
+ax.tick_params(labelcolor='r', labelsize='medium', width=3)
+
+plt.show()
+```
 
 ## Loading Libraries
 
@@ -247,6 +360,85 @@ the loaded packages might be quite large.
 
 ```js
 script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
+
+@Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
+
+@Pyodide.exec_
+<script>
+async function run(code, force=false) {
+    if (!window._py_running || force) {
+        window._py_running = true
+    
+        const plot = document.getElementById('target_@0')
+        plot.innerHTML = ""
+        document.pyodideMplTarget = plot
+
+        if (!window._py) {
+            try {
+                window._py = await loadPyodide({fullStdLib: false})
+                window._py_modules = []
+                window._py_running = true
+            } catch(e) {
+                send.lia(e.message, false)
+                send.lia("LIA: stop")
+            }
+        }
+
+        try {
+            window._py.setStdout((text) => console.log(text))
+            window._py.setStderr((text) => console.err(text))
+
+            window._py.setStdin({stdin: () => {
+            return prompt("stdin")
+            }})
+        
+            const rslt = await window._py.runPython(code)
+            
+            if (rslt !== undefined) {
+                send.lia(rslt)
+            } else {
+                send.lia("")
+            }
+        } catch(e) {
+            let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+
+            window.console.warn("Pyodide", e.message)
+        
+            if (!module) {
+                send.lia(e.message, false)
+            
+            } else {
+                if (module.length > 1) {
+                    module = module[1]
+
+                    if (window._py_modules.includes(module)) {
+                        console.warn(e.message)
+                        send.lia(e.message, false)
+                    } else {
+                        send.lia("downloading module => " + module)
+                        window._py_modules.push(module)
+                        await window._py.loadPackage(module)
+                        await run(code, true)
+                    }
+                }
+            }
+        }
+        send.lia("LIA: stop")
+        window._py_running = false
+    } else {
+        setTimeout(() => { run(code) }, 1000)
+    }
+}
+
+setTimeout(() => { run(`@1`) }, 500)
+
+"calculating, please wait ..."
+
+</script>
+
+<div id="target_@0"></div>
+@end
+
 
 @Pyodide.eval: @Pyodide.eval_(@uid)
 
@@ -288,7 +480,7 @@ async function run(code) {
           return prompt("stdin")
         }}) 
        
-        const rslt = await window._py.runPython(code, {})
+        const rslt = await window._py.runPython(code)
 
         if (typeof rslt === 'string') {
             send.lia(rslt)
