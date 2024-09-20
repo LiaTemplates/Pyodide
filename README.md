@@ -141,7 +141,10 @@ async function run(code) {
 
         if (typeof rslt === 'string') {
             send.lia(rslt)
+        } else if (rslt && typeof rslt.toString === 'function') {
+            send.lia(rslt.toString());
         }
+
     } catch(e) {
         let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
 
