@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.3.2
+version:  0.3.3
 language: en
 narrator: US English Male
 
@@ -230,7 +230,7 @@ https://github.com/LiaTemplates/pyodide
                                    --{{1}}--
 There are three ways to use this template. The easiest way is to use the
 `import` statement and the url of the raw text-file of the master branch or any
-other branch or version. But you can also copy the required functionionality
+other branch or version. But you can also copy the required functionality
 directly into the header of your Markdown document, see therefor the
 [Implementation](#3). And of course, you could also clone this project and
 change it, as you wish.
