@@ -12,13 +12,13 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
-script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
+script:   https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js
 
 
 @Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
 
 @Pyodide.exec_
-<script>
+<script run-once modify="# --python--\n">
 async function run(code, force=false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
@@ -40,7 +40,7 @@ async function run(code, force=false) {
 
         try {
             window.pyodide.setStdout((text) => console.log(text))
-            window.pyodide.setStderr((text) => console.err(text))
+            window.pyodide.setStderr((text) => console.error(text))
 
             window.pyodide.setStdin({stdin: () => {
             return prompt("stdin")
@@ -54,7 +54,7 @@ async function run(code, force=false) {
                 send.lia("")
             }
         } catch(e) {
-            let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+            let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
             window.console.warn("Pyodide", e.message)
         
@@ -84,7 +84,9 @@ async function run(code, force=false) {
     }
 }
 
-setTimeout(() => { run(`@1`) }, 500)
+setTimeout(() => { run(`# --python--
+@1 # --python--
+`) }, 500)
 
 "calculating, please wait ..."
 
@@ -129,7 +131,7 @@ async function run(code) {
         window.pyodide.setStderr({ write: (buffer) => {
             const decoder = new TextDecoder()
             const string = decoder.decode(buffer)
-            console.err(string)
+            console.error(string)
             return buffer.length
         }})
 
@@ -146,7 +148,7 @@ async function run(code) {
         }
 
     } catch(e) {
-        let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+        let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
         window.console.warn("Pyodide", e.message)
     
@@ -389,7 +391,7 @@ async function run(code, force=false) {
 
         try {
             window.pyodide.setStdout((text) => console.log(text))
-            window.pyodide.setStderr((text) => console.err(text))
+            window.pyodide.setStderr((text) => console.error(text))
 
             window.pyodide.setStdin({stdin: () => {
             return prompt("stdin")
@@ -403,7 +405,7 @@ async function run(code, force=false) {
                 send.lia("")
             }
         } catch(e) {
-            let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+            let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
             window.console.warn("Pyodide", e.message)
         
@@ -475,7 +477,7 @@ async function run(code) {
         window.pyodide.setStderr({ write: (buffer) => {
             const decoder = new TextDecoder()
             const string = decoder.decode(buffer)
-            console.err(string)
+            console.error(string)
             return buffer.length
         }})
 
@@ -489,7 +491,7 @@ async function run(code) {
             send.lia(rslt)
         }
     } catch(e) {
-        let module = e.message.match(/ModuleNotFoundError: The module '([^']+)/i)
+        let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
         window.console.warn("Pyodide", e.message)
     
