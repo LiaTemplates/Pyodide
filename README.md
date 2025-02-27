@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.3.3
+version:  0.3.4
 language: en
 narrator: US English Male
 
@@ -12,27 +12,53 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
-script:   https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js
+script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 
 @Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
 
 @Pyodide.exec_
 <script run-once modify="# --python--\n">
-async function run(code, force=false) {
+async function installPackagesManually_exec(msg) {
+    let module = msg.match(/ModuleNotFoundError: No module named '([^']+)/i)
+
+    window.console.warn("Pyodide", msg)
+
+    if (!module) {
+        send.lia(msg, false)
+
+    } else {
+        if (module.length > 1) {
+            module = module[1]
+
+            if (window.pyodide_modules.includes(module)) {
+                console.warn(msg)
+                send.lia(msg, false)
+            } else {
+                send.lia("downloading module => " + module)
+                window.pyodide_modules.push(module)
+                await window.pyodide.loadPackage(module)
+                await run_exec(code, true)
+            }
+        }
+    }
+}
+
+
+async function run_exec(code, force = false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
-    
+
         const plot = document.getElementById('target_@0')
         plot.innerHTML = ""
         document.pyodideMplTarget = plot
 
         if (!window.pyodide) {
             try {
-                window.pyodide = await loadPyodide({fullStdLib: false})
+                window.pyodide = await loadPyodide({ fullStdLib: false });
                 window.pyodide_modules = []
                 window.pyodide_running = true
-            } catch(e) {
+            } catch (e) {
                 send.lia(e.message, false)
                 send.lia("LIA: stop")
             }
@@ -42,49 +68,33 @@ async function run(code, force=false) {
             window.pyodide.setStdout((text) => console.log(text))
             window.pyodide.setStderr((text) => console.error(text))
 
-            window.pyodide.setStdin({stdin: () => {
-            return prompt("stdin")
-            }})
-        
-            const rslt = await window.pyodide.runPython(code)
-            
-            if (rslt !== undefined) {
-                send.lia(rslt)
-            } else {
-                send.lia("")
-            }
-        } catch(e) {
-            let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
-
-            window.console.warn("Pyodide", e.message)
-        
-            if (!module) {
-                send.lia(e.message, false)
-            
-            } else {
-                if (module.length > 1) {
-                    module = module[1]
-
-                    if (window.pyodide_modules.includes(module)) {
-                        console.warn(e.message)
-                        send.lia(e.message, false)
-                    } else {
-                        send.lia("downloading module => " + module)
-                        window.pyodide_modules.push(module)
-                        await window.pyodide.loadPackage(module)
-                        await run(code, true)
-                    }
+            window.pyodide.setStdin({
+                stdin: () => {
+                    return prompt("stdin")
                 }
-            }
+            })
+
+            window.pyodide.loadPackagesFromImports(code).then(async () => {
+                const rslt = await window.pyodide.runPython(code)
+    
+                if (rslt !== undefined) {
+                    send.lia(rslt)
+                } else {
+                    send.lia("")
+                }
+            }, installPackagesManually_exec);
+
+        } catch (e) {
+            installPackagesManually_exec(e.message)
         }
         send.lia("LIA: stop")
         window.pyodide_running = false
     } else {
-        setTimeout(() => { run(code) }, 1000)
+        setTimeout(() => { run_exec(code) }, 1000)
     }
 }
 
-setTimeout(() => { run(`# --python--
+setTimeout(() => { run_exec(`# --python--
 @1 # --python--
 `) }, 500)
 
@@ -103,7 +113,41 @@ setTimeout(() => { run(`# --python--
 
 @Pyodide.eval_
 <script>
-async function run(code) {
+async function installPackagesManually_eval(msg) {
+    let module = msg.match(/ModuleNotFoundError: No module named '([^']+)/i);
+
+    window.console.warn('Pyodide', msg);
+
+    if (!module) {
+        const err = msg.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i);
+
+        if (err !== null && err.length >= 3) {
+            send.lia(msg,
+                [[{
+                    row: parseInt(err[1]) - 1,
+                    column: 1,
+                    text: err[2],
+                    type: 'error',
+                }]],
+                false);
+        } else {
+            console.error(msg);
+        }
+    } else if (module.length > 1) {
+        module = module[1];
+
+        if (window.pyodide_modules.includes(module)) {
+            console.error(msg);
+        } else {
+            console.debug('downloading module =>', module);
+            window.pyodide_modules.push(module);
+            await window.pyodide.loadPackage(module);
+            await run_eval(code);
+        }
+    }
+}
+
+async function run_eval(code) {
 
     const plot = document.getElementById('target_@0')
     plot.innerHTML = ""
@@ -111,75 +155,52 @@ async function run(code) {
 
     if (!window.pyodide) {
         try {
-            window.pyodide = await loadPyodide({fullStdLib: false})
+            window.pyodide = await loadPyodide({ fullStdLib: false });
             window.pyodide_modules = []
             window.pyodide_running = true
-        } catch(e) {
+        } catch (e) {
             console.error(e.message)
             send.lia("LIA: stop")
         }
     }
 
     try {
-        window.pyodide.setStdout({ write: (buffer) => {
-            const decoder = new TextDecoder()
-            const string = decoder.decode(buffer)
-            console.stream(string)
-            return buffer.length
-        }})
-
-        window.pyodide.setStderr({ write: (buffer) => {
-            const decoder = new TextDecoder()
-            const string = decoder.decode(buffer)
-            console.error(string)
-            return buffer.length
-        }})
-
-        window.pyodide.setStdin({stdin: () => {
-          return prompt("stdin")
-        }}) 
-       
-        const rslt = await window.pyodide.runPython(code)
-
-        if (typeof rslt === 'string') {
-            send.lia(rslt)
-        } else if (rslt && typeof rslt.toString === 'function') {
-            send.lia(rslt.toString());
-        }
-
-    } catch(e) {
-        let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
-
-        window.console.warn("Pyodide", e.message)
-    
-        if (!module) {
-            const err = e.message.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i)
-
-            if (err!== null && err.length >= 3) {
-                send.lia( e.message,
-                  [[{ row : parseInt(err[1]) - 1,
-                      column : 1,
-                      text : err[2],
-                      type : "error"
-                  }]],
-                  false)
-            } else {
-                console.error(e.message)
+        window.pyodide.setStdout({
+            write: (buffer) => {
+                const decoder = new TextDecoder()
+                const string = decoder.decode(buffer)
+                console.stream(string)
+                return buffer.length
             }
-        } else {
-            if (module.length > 1) {
-                module = module[1]
+        })
 
-                if (window.pyodide_modules.includes(module)) {
-                    console.error(e.message)
-                } else {
-                    console.debug("downloading module =>", module)
-                    window.pyodide_modules.push(module)
-                    await window.pyodide.loadPackage(module)
-                    await run(code)
-                }
+        window.pyodide.setStderr({
+            write: (buffer) => {
+                const decoder = new TextDecoder()
+                const string = decoder.decode(buffer)
+                console.error(string)
+                return buffer.length
             }
-        }
+        })
+
+        window.pyodide.setStdin({
+            stdin: () => {
+                return prompt("stdin")
+            }
+        })
+
+        window.pyodide.loadPackagesFromImports(code).then(async () => {
+            const rslt = await window.pyodide.runPython(code)
+
+            if (typeof rslt === 'string') {
+                send.lia(rslt)
+            } else if (rslt && typeof rslt.toString === 'function') {
+                send.lia(rslt.toString());
+            }
+        }, installPackagesManually_eval);
+
+    } catch (e) {
+        installPackagesManually_eval(e.message);
     }
     send.lia("LIA: stop")
     window.pyodide_running = false
@@ -194,7 +215,7 @@ if (window.pyodide_running) {
   window.pyodide_running = true
 
   setTimeout(() => {
-    run(`@input`)
+    run_eval(`@input`)
   }, 500)
 
   "LIA: wait"
