@@ -15,8 +15,8 @@ comment:  Use the real Python in your LiaScript courses, by loading this
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @onload
-async function run_exec(code, localSend, targetId, force = false) {
-    if (!window.pyodide_running || force) {
+async function run_exec(code, localSend, targetId) {
+    if (!window.pyodide_running) {
         window.pyodide_running = true
 
         const plot = document.getElementById(targetId)
