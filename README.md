@@ -334,7 +334,7 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 async function run(code, force=false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
-    
+
         const plot = document.getElementById('target_@0')
         plot.innerHTML = ""
         document.pyodideMplTarget = plot
@@ -357,9 +357,9 @@ async function run(code, force=false) {
             window.pyodide.setStdin({stdin: () => {
             return prompt("stdin")
             }})
-        
+
             const rslt = await window.pyodide.runPython(code)
-            
+
             if (rslt !== undefined) {
                 send.lia(rslt)
             } else {
@@ -369,10 +369,10 @@ async function run(code, force=false) {
             let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
             window.console.warn("Pyodide", e.message)
-        
+
             if (!module) {
                 send.lia(e.message, false)
-            
+
             } else {
                 if (module.length > 1) {
                     module = module[1]
@@ -444,8 +444,8 @@ async function run(code) {
 
         window.pyodide.setStdin({stdin: () => {
           return prompt("stdin")
-        }}) 
-       
+        }})
+
         const rslt = await window.pyodide.runPython(code)
 
         if (typeof rslt === 'string') {
@@ -455,7 +455,7 @@ async function run(code) {
         let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
         window.console.warn("Pyodide", e.message)
-    
+
         if (!module) {
             const err = e.message.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i)
 
