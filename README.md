@@ -18,7 +18,7 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 @Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
 
 @Pyodide.exec_
-<script run-once modify="# --python--\n">
+<script run-once modify="# --python--\n" type="text/python">
 async function run_exec(code, force = false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
