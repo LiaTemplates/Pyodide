@@ -19,49 +19,53 @@ async function run_exec(code, localSend, targetId) {
     if (!window.pyodide_running) {
         window.pyodide_running = true
 
-        const plot = document.getElementById(targetId)
-        plot.innerHTML = ""
-        document.pyodideMplTarget = plot
-
-        if (!window.pyodide) {
-            try {
-                window.pyodide = await loadPyodide({ fullStdLib: false });
-                window.pyodide_modules = []
-                window.pyodide_running = true
-            } catch (e) {
-                localSend.lia(e.message, false)
-                localSend.lia("LIA: stop")
-            }
-        }
-
-        try {
-            window.pyodide.setStdout((text) => console.log(text))
-            window.pyodide.setStderr((text) => console.error(text))
-
-            window.pyodide.setStdin({
-                stdin: () => {
-                    return prompt("stdin")
-                }
-            })
-
-            window.pyodide.loadPackagesFromImports(code).then(async () => {
-                const rslt = await window.pyodide.runPython(code)
-
-                if (rslt !== undefined) {
-                    localSend.lia(rslt)
-                } else {
-                    localSend.lia("")
-                }
-            });
-
-        } catch (e) {
-            console.error(e.message)
-        }
-        localSend.lia("LIA: stop")
-        window.pyodide_running = false
+        await run_exec_inner(code, localSend, targetId)
     } else {
         setTimeout(() => { run_exec(code, localSend, targetId) }, 1000)
     }
+}
+
+async function run_exec_inner(code, localSend, targetId) {
+    const plot = document.getElementById(targetId)
+    plot.innerHTML = ""
+    document.pyodideMplTarget = plot
+
+    if (!window.pyodide) {
+        try {
+            window.pyodide = await loadPyodide({ fullStdLib: false });
+            window.pyodide_modules = []
+            window.pyodide_running = true
+        } catch (e) {
+            localSend.lia(e.message, false)
+            localSend.lia("LIA: stop")
+        }
+    }
+
+    try {
+        window.pyodide.setStdout((text) => console.log(text))
+        window.pyodide.setStderr((text) => console.error(text))
+
+        window.pyodide.setStdin({
+            stdin: () => {
+                return prompt("stdin")
+            }
+        })
+
+        window.pyodide.loadPackagesFromImports(code).then(async () => {
+            const rslt = await window.pyodide.runPython(code)
+
+            if (rslt !== undefined) {
+                localSend.lia(rslt)
+            } else {
+                localSend.lia("")
+            }
+        });
+
+    } catch (e) {
+        console.error(e.message)
+    }
+    localSend.lia("LIA: stop")
+    window.pyodide_running = false
 }
 
 async function run_eval(code, localSend, localConsole, targetId) {
