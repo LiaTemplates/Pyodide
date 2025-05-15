@@ -19,32 +19,6 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @Pyodide.exec_
 <script run-once modify="# --python--\n">
-async function installPackagesManually_exec(msg) {
-    let module = msg.match(/ModuleNotFoundError: No module named '([^']+)/i)
-
-    window.console.warn("Pyodide", msg)
-
-    if (!module) {
-        send.lia(msg, false)
-
-    } else {
-        if (module.length > 1) {
-            module = module[1]
-
-            if (window.pyodide_modules.includes(module)) {
-                console.warn(msg)
-                send.lia(msg, false)
-            } else {
-                send.lia("downloading module => " + module)
-                window.pyodide_modules.push(module)
-                await window.pyodide.loadPackage(module)
-                await run_exec(code, true)
-            }
-        }
-    }
-}
-
-
 async function run_exec(code, force = false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
@@ -76,16 +50,16 @@ async function run_exec(code, force = false) {
 
             window.pyodide.loadPackagesFromImports(code).then(async () => {
                 const rslt = await window.pyodide.runPython(code)
-    
+
                 if (rslt !== undefined) {
                     send.lia(rslt)
                 } else {
                     send.lia("")
                 }
-            }, installPackagesManually_exec);
+            });
 
         } catch (e) {
-            installPackagesManually_exec(e.message)
+            console.error(e.message)
         }
         send.lia("LIA: stop")
         window.pyodide_running = false
@@ -113,40 +87,6 @@ setTimeout(() => { run_exec(`# --python--
 
 @Pyodide.eval_
 <script>
-async function installPackagesManually_eval(msg) {
-    let module = msg.match(/ModuleNotFoundError: No module named '([^']+)/i);
-
-    window.console.warn('Pyodide', msg);
-
-    if (!module) {
-        const err = msg.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i);
-
-        if (err !== null && err.length >= 3) {
-            send.lia(msg,
-                [[{
-                    row: parseInt(err[1]) - 1,
-                    column: 1,
-                    text: err[2],
-                    type: 'error',
-                }]],
-                false);
-        } else {
-            console.error(msg);
-        }
-    } else if (module.length > 1) {
-        module = module[1];
-
-        if (window.pyodide_modules.includes(module)) {
-            console.error(msg);
-        } else {
-            console.debug('downloading module =>', module);
-            window.pyodide_modules.push(module);
-            await window.pyodide.loadPackage(module);
-            await run_eval(code);
-        }
-    }
-}
-
 async function run_eval(code) {
 
     const plot = document.getElementById('target_@0')
@@ -197,10 +137,10 @@ async function run_eval(code) {
             } else if (rslt && typeof rslt.toString === 'function') {
                 send.lia(rslt.toString());
             }
-        }, installPackagesManually_eval);
+        });
 
     } catch (e) {
-        installPackagesManually_eval(e.message);
+        console.error(e.message);
     }
     send.lia("LIA: stop")
     window.pyodide_running = false
