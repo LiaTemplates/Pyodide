@@ -14,16 +14,12 @@ comment:  Use the real Python in your LiaScript courses, by loading this
 
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
-
-@Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
-
-@Pyodide.exec_
-<script run-once modify="# --python--\n" type="text/python">
-async function run_exec(code, force = false) {
+@onload
+async function run_exec(code, localSend, targetId, force = false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
 
-        const plot = document.getElementById('target_@0')
+        const plot = document.getElementById(targetId)
         plot.innerHTML = ""
         document.pyodideMplTarget = plot
 
@@ -33,8 +29,8 @@ async function run_exec(code, force = false) {
                 window.pyodide_modules = []
                 window.pyodide_running = true
             } catch (e) {
-                send.lia(e.message, false)
-                send.lia("LIA: stop")
+                localSend.lia(e.message, false)
+                localSend.lia("LIA: stop")
             }
         }
 
@@ -52,44 +48,25 @@ async function run_exec(code, force = false) {
                 const rslt = await window.pyodide.runPython(code)
 
                 if (rslt !== undefined) {
-                    send.lia(rslt)
+                    localSend.lia(rslt)
                 } else {
-                    send.lia("")
+                    localSend.lia("")
                 }
             });
 
         } catch (e) {
             console.error(e.message)
         }
-        send.lia("LIA: stop")
+        localSend.lia("LIA: stop")
         window.pyodide_running = false
     } else {
-        setTimeout(() => { run_exec(code) }, 1000)
+        setTimeout(() => { run_exec(code, localSend, targetId) }, 1000)
     }
 }
 
-setTimeout(() => { run_exec(`# --python--
-@1 # --python--
-`) }, 500)
+async function run_eval(code, localSend, localConsole, targetId) {
 
-"calculating, please wait ..."
-
-</script>
-
-<div id="target_@0"></div>
-@end
-
-
-
-
-
-@Pyodide.eval: @Pyodide.eval_(@uid)
-
-@Pyodide.eval_
-<script>
-async function run_eval(code) {
-
-    const plot = document.getElementById('target_@0')
+    const plot = document.getElementById(targetId)
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
 
@@ -100,7 +77,7 @@ async function run_eval(code) {
             window.pyodide_running = true
         } catch (e) {
             console.error(e.message)
-            send.lia("LIA: stop")
+            localSend.lia("LIA: stop")
         }
     }
 
@@ -109,7 +86,7 @@ async function run_eval(code) {
             write: (buffer) => {
                 const decoder = new TextDecoder()
                 const string = decoder.decode(buffer)
-                console.stream(string)
+                localConsole.stream(string)
                 return buffer.length
             }
         })
@@ -118,7 +95,7 @@ async function run_eval(code) {
             write: (buffer) => {
                 const decoder = new TextDecoder()
                 const string = decoder.decode(buffer)
-                console.error(string)
+                localConsole.error(string)
                 return buffer.length
             }
         })
@@ -133,18 +110,44 @@ async function run_eval(code) {
             const rslt = await window.pyodide.runPython(code)
 
             if (typeof rslt === 'string') {
-                send.lia(rslt)
+                localSend.lia(rslt)
             } else if (rslt && typeof rslt.toString === 'function') {
-                send.lia(rslt.toString());
+                localSend.lia(rslt.toString());
             }
         });
 
     } catch (e) {
         console.error(e.message);
     }
-    send.lia("LIA: stop")
+    localSend.lia("LIA: stop")
     window.pyodide_running = false
 }
+
+window.pythonFunctions = { run_eval, run_exec }
+@end
+
+
+@Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
+
+@Pyodide.exec_
+<script run-once modify="# --python--\n" type="text/python">
+
+setTimeout(() => { window.pythonFunctions.run_exec(`# --python--
+@1 # --python--
+`, send, "target_@0") }, 500)
+
+"calculating, please wait ..."
+
+</script>
+
+<div id="target_@0"></div>
+@end
+
+
+@Pyodide.eval: @Pyodide.eval_(@uid)
+
+@Pyodide.eval_
+<script>
 
 if (window.pyodide_running) {
   setTimeout(() => {
@@ -155,7 +158,7 @@ if (window.pyodide_running) {
   window.pyodide_running = true
 
   setTimeout(() => {
-    run_eval(`@input`)
+    window.pythonFunctions.run_eval(`@input`, send, console, "target_@0")
   }, 500)
 
   "LIA: wait"
