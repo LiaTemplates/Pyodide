@@ -47,7 +47,7 @@ async function runPython(code, io, targetId) {
             io.liaout(rslt)
         } else if (rslt !== undefined && typeof rslt.toString === 'function') {
             io.liaout(rslt.toString())
-        } else {
+        } else if (io.clearOut) {
             io.liaout("")
         }
     } catch (e) {
@@ -78,7 +78,8 @@ async function run_exec() {
             stdout: (text) => console.log(text),
             stderr: (text) => console.error(text),
             liaout: send.lia,
-            liaerr: send.lia
+            liaerr: send.lia,
+            clearOut: true
         }
 
         await window.runPython(code, io, "target_@0")
@@ -122,7 +123,8 @@ async function run_eval() {
             }
         },
         liaout: send.lia,
-        liaerr: console.error
+        liaerr: console.error,
+        clearOut: false
     }
 
     await window.runPython(code, io, "target_@0")
