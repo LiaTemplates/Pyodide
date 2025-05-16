@@ -15,24 +15,7 @@ comment:  Use the real Python in your LiaScript courses, by loading this
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @onload
-async function run_exec(code, localSend, targetId) {
-    if (!window.pyodide_running) {
-        window.pyodide_running = true
-
-        const io = {
-            stdout: (text) => console.log(text),
-            stderr: (text) => console.error(text),
-            liaout: localSend.lia,
-            liaerr: localSend.lia
-        }
-
-        await run_code(code, io, targetId)
-    } else {
-        setTimeout(() => { run_exec(code, localSend, targetId) }, 1000)
-    }
-}
-
-async function run_code(code, io, targetId) {
+async function runPython(code, io, targetId) {
     const plot = document.getElementById(targetId)
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
@@ -77,32 +60,7 @@ async function run_code(code, io, targetId) {
     window.pyodide_running = false
 }
 
-async function run_eval(code, localSend, localConsole, targetId) {
-    const io = {
-        stdout: {
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                localConsole.stream(string)
-                return buffer.length
-            }
-        },
-        stderr: {
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                localConsole.error(string)
-                return buffer.length
-            }
-        },
-        liaout: localSend.lia,
-        liaerr: localConsole.error
-    }
-
-    await run_code(code, io, targetId)
-}
-
-window.pythonFunctions = { run_eval, run_exec }
+window.runPython = runPython
 @end
 
 
@@ -111,9 +69,28 @@ window.pythonFunctions = { run_eval, run_exec }
 @Pyodide.exec_
 <script run-once modify="# --python--\n" type="text/python">
 
-setTimeout(() => { window.pythonFunctions.run_exec(`# --python--
-@1 # --python--
-`, send, "target_@0") }, 500)
+async function run_exec() {
+    const code = `# --python--
+@1
+# --python--
+`
+    if (!window.pyodide_running) {
+        window.pyodide_running = true
+
+        const io = {
+            stdout: (text) => console.log(text),
+            stderr: (text) => console.error(text),
+            liaout: send.lia,
+            liaerr: send.lia
+        }
+
+        await window.runPython(code, io, "target_@0")
+    } else {
+        setTimeout(run_exec, 1000)
+    }
+}
+
+setTimeout(run_exec, 500)
 
 "calculating, please wait ..."
 
@@ -128,6 +105,32 @@ setTimeout(() => { window.pythonFunctions.run_exec(`# --python--
 @Pyodide.eval_
 <script>
 
+async function run_eval() {
+    const code = `@input`
+    const io = {
+        stdout: {
+            write: (buffer) => {
+                const decoder = new TextDecoder()
+                const string = decoder.decode(buffer)
+                console.stream(string)
+                return buffer.length
+            }
+        },
+        stderr: {
+            write: (buffer) => {
+                const decoder = new TextDecoder()
+                const string = decoder.decode(buffer)
+                console.error(string)
+                return buffer.length
+            }
+        },
+        liaout: send.lia,
+        liaerr: console.error
+    }
+
+    await window.runPython(code, io, "target_@0")
+}
+
 if (window.pyodide_running) {
   setTimeout(() => {
     console.warn("Another process is running, wait until finished")
@@ -136,9 +139,7 @@ if (window.pyodide_running) {
 } else {
   window.pyodide_running = true
 
-  setTimeout(() => {
-    window.pythonFunctions.run_eval(`@input`, send, console, "target_@0")
-  }, 500)
+  setTimeout(run_eval, 500)
 
   "LIA: wait"
 }
