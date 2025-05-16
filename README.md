@@ -34,7 +34,6 @@ async function runPython(code, io, targetId) {
     try {
         window.pyodide.setStdout(io.stdout)
         window.pyodide.setStderr(io.stderr)
-
         window.pyodide.setStdin({
             stdin: () => {
                 return prompt("stdin")
@@ -132,16 +131,16 @@ async function run_eval() {
 }
 
 if (window.pyodide_running) {
-  setTimeout(() => {
-    console.warn("Another process is running, wait until finished")
-  }, 500)
-  "LIA: stop"
+    setTimeout(() => {
+        console.warn("Another process is running, wait until finished")
+    }, 500)
+
+    "LIA: stop"
 } else {
-  window.pyodide_running = true
+    window.pyodide_running = true
+    setTimeout(run_eval, 500)
 
-  setTimeout(run_eval, 500)
-
-  "LIA: wait"
+    "LIA: wait"
 }
 </script>
 
