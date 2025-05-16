@@ -23,11 +23,11 @@ async function runPython(code, io, targetId) {
     if (!window.pyodide) {
         try {
             window.pyodide = await loadPyodide({ fullStdLib: false });
-            window.pyodide_modules = []
             window.pyodide_running = true
         } catch (e) {
-            io.liaerr(e.message, false)
+            io.liaerr(e.message)
             io.liaout("LIA: stop")
+            return
         }
     }
 
