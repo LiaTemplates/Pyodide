@@ -19,13 +19,20 @@ async function run_exec(code, localSend, targetId) {
     if (!window.pyodide_running) {
         window.pyodide_running = true
 
-        await run_exec_inner(code, localSend, targetId)
+        const io = {
+            stdout: (text) => console.log(text),
+            stderr: (text) => console.error(text),
+            liaout: localSend.lia,
+            liaerr: localSend.lia
+        }
+
+        await run_code(code, io, targetId)
     } else {
         setTimeout(() => { run_exec(code, localSend, targetId) }, 1000)
     }
 }
 
-async function run_exec_inner(code, localSend, targetId) {
+async function run_code(code, io, targetId) {
     const plot = document.getElementById(targetId)
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
@@ -36,73 +43,14 @@ async function run_exec_inner(code, localSend, targetId) {
             window.pyodide_modules = []
             window.pyodide_running = true
         } catch (e) {
-            localSend.lia(e.message, false)
-            localSend.lia("LIA: stop")
+            io.liaerr(e.message, false)
+            io.liaout("LIA: stop")
         }
     }
 
     try {
-        window.pyodide.setStdout((text) => console.log(text))
-        window.pyodide.setStderr((text) => console.error(text))
-
-        window.pyodide.setStdin({
-            stdin: () => {
-                return prompt("stdin")
-            }
-        })
-
-        window.pyodide.loadPackagesFromImports(code).then(async () => {
-            const rslt = await window.pyodide.runPython(code)
-
-            if (rslt !== undefined) {
-                localSend.lia(rslt)
-            } else {
-                localSend.lia("")
-            }
-        });
-
-    } catch (e) {
-        console.error(e.message)
-    }
-    localSend.lia("LIA: stop")
-    window.pyodide_running = false
-}
-
-async function run_eval(code, localSend, localConsole, targetId) {
-
-    const plot = document.getElementById(targetId)
-    plot.innerHTML = ""
-    document.pyodideMplTarget = plot
-
-    if (!window.pyodide) {
-        try {
-            window.pyodide = await loadPyodide({ fullStdLib: false });
-            window.pyodide_modules = []
-            window.pyodide_running = true
-        } catch (e) {
-            console.error(e.message)
-            localSend.lia("LIA: stop")
-        }
-    }
-
-    try {
-        window.pyodide.setStdout({
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                localConsole.stream(string)
-                return buffer.length
-            }
-        })
-
-        window.pyodide.setStderr({
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                localConsole.error(string)
-                return buffer.length
-            }
-        })
+        window.pyodide.setStdout(io.stdout)
+        window.pyodide.setStderr(io.stderr)
 
         window.pyodide.setStdin({
             stdin: () => {
@@ -114,17 +62,44 @@ async function run_eval(code, localSend, localConsole, targetId) {
             const rslt = await window.pyodide.runPython(code)
 
             if (typeof rslt === 'string') {
-                localSend.lia(rslt)
-            } else if (rslt && typeof rslt.toString === 'function') {
-                localSend.lia(rslt.toString());
+                io.liaout(rslt)
+            } else if (rslt !== undefined && typeof rslt.toString === 'function') {
+                io.liaout(rslt.toString())
+            } else {
+                io.liaout("")
             }
         });
 
     } catch (e) {
-        console.error(e.message);
+        io.liaout(e.message)
     }
-    localSend.lia("LIA: stop")
+    io.liaout("LIA: stop")
     window.pyodide_running = false
+}
+
+async function run_eval(code, localSend, localConsole, targetId) {
+    const io = {
+        stdout: {
+            write: (buffer) => {
+                const decoder = new TextDecoder()
+                const string = decoder.decode(buffer)
+                localConsole.stream(string)
+                return buffer.length
+            }
+        },
+        stderr: {
+            write: (buffer) => {
+                const decoder = new TextDecoder()
+                const string = decoder.decode(buffer)
+                localConsole.error(string)
+                return buffer.length
+            }
+        },
+        liaout: localSend.lia,
+        liaerr: localConsole.error
+    }
+
+    await run_code(code, io, targetId)
 }
 
 window.pythonFunctions = { run_eval, run_exec }
