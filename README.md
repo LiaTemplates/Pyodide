@@ -15,8 +15,8 @@ comment:  Use the real Python in your LiaScript courses, by loading this
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @onload
-async function runPython(code, io, targetId) {
-    const plot = document.getElementById(targetId)
+async function runPython(code, io) {
+    const plot = document.getElementById(io.mplout)
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
 
@@ -79,10 +79,11 @@ async function run_exec() {
             stderr: (text) => console.error(text),
             liaout: send.lia,
             liaerr: send.lia,
-            clearOut: true
+            clearOut: true,
+            mplout: "target_@0"
         }
 
-        await window.runPython(code, io, "target_@0")
+        await window.runPython(code, io)
     } else {
         setTimeout(run_exec, 1000)
     }
@@ -124,10 +125,11 @@ async function run_eval() {
         },
         liaout: send.lia,
         liaerr: console.error,
-        clearOut: false
+        clearOut: false,
+        mplout: "target_@0"
     }
 
-    await window.runPython(code, io, "target_@0")
+    await window.runPython(code, io)
 }
 
 if (window.pyodide_running) {
