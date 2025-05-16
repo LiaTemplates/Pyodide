@@ -278,21 +278,7 @@ plt.show()
                                    --{{0}}--
 
 Only the Python standard library and `six` are available at the beginning, other
-libraries are globally loaded, if defined within the script. If you know, that certain modules are required, you can speed up their loading by defining them
-manually in your `onload` macro, as it is shown below.
-
-
-``` markdown
-<!--
-author:  ...
-email:   ...
-
-import:  https://github.com/LiaTemplates/Pyodide
-
-@onload: window.py_packages = ["matplotlib", "numpy"]
--->
-...
-```
+libraries are globally loaded, if defined within the script.
 
 > __Note:__ loading large packages such as `scipy` may take some time, since
 >           they might require to download many MB of precompiled packages.
