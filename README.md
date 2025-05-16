@@ -40,18 +40,16 @@ async function runPython(code, io, targetId) {
             }
         })
 
-        window.pyodide.loadPackagesFromImports(code).then(async () => {
-            const rslt = await window.pyodide.runPython(code)
+        await window.pyodide.loadPackagesFromImports(code)
+        const rslt = await window.pyodide.runPythonAsync(code)
 
-            if (typeof rslt === 'string') {
-                io.liaout(rslt)
-            } else if (rslt !== undefined && typeof rslt.toString === 'function') {
-                io.liaout(rslt.toString())
-            } else {
-                io.liaout("")
-            }
-        });
-
+        if (typeof rslt === 'string') {
+            io.liaout(rslt)
+        } else if (rslt !== undefined && typeof rslt.toString === 'function') {
+            io.liaout(rslt.toString())
+        } else {
+            io.liaout("")
+        }
     } catch (e) {
         io.liaout(e.message)
     }
