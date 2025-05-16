@@ -67,7 +67,7 @@ window.runPython = runPython
 <script run-once modify="# --python--\n" type="text/python">
 
 async function run_exec() {
-    const code = `# --python--
+    const code = String.raw`# --python--
 @1
 # --python--
 `
@@ -103,7 +103,7 @@ setTimeout(run_exec, 500)
 <script>
 
 async function run_eval() {
-    const code = `@input`
+    const code = String.raw`@input`
     const io = {
         stdout: {
             write: (buffer) => {
