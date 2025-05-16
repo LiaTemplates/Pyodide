@@ -51,7 +51,7 @@ async function runPython(code, io) {
             io.liaout("")
         }
     } catch (e) {
-        io.liaout(e.message)
+        io.liaerr(e.message)
     }
     io.liaout("LIA: stop")
     window.pyodide_running = false
@@ -78,7 +78,7 @@ async function run_exec() {
             stdout: (text) => console.log(text),
             stderr: (text) => console.error(text),
             liaout: send.lia,
-            liaerr: send.lia,
+            liaerr: (text) => send.lia(text, false),
             clearOut: true,
             mplout: "target_@0"
         }
