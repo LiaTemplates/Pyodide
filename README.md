@@ -75,8 +75,8 @@ async function run_exec() {
         window.pyodide_running = true
 
         const io = {
-            stdout: (text) => console.log(text),
-            stderr: (text) => console.error(text),
+            stdout: {batched: console.log},
+            stderr: {batched: console.error},
             liaout: send.lia,
             liaerr: (text) => send.lia(text, false),
             clearOut: true,
