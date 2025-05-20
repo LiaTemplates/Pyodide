@@ -29,6 +29,12 @@ async function loadPython() {
                 frames = traceback.extract_tb(sys.last_traceback)
                 lines = [(frame.lineno, frame.colno) for frame in frames if frame.filename == '<exec>']
             return summary, lines
+
+        def _lia_flush_streams():
+            import sys
+
+            sys.stdout.flush()
+            sys.stderr.flush()
     `)
     return pyodide
 }
@@ -77,6 +83,7 @@ async function runPython(code, io) {
             io.liaerr(e.message)
         }
     }
+    await window.pyodide.runPythonAsync("_lia_flush_streams()")
     io.liaout("LIA: stop")
     window.pyodide_running = false
 }
@@ -143,7 +150,7 @@ async function run_eval() {
             write: (buffer) => {
                 const decoder = new TextDecoder()
                 const string = decoder.decode(buffer)
-                console.error(string)
+                send.log("error", '', [string])
                 return buffer.length
             }
         },
