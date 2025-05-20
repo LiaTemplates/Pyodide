@@ -15,6 +15,24 @@ comment:  Use the real Python in your LiaScript courses, by loading this
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @onload
+async function loadPython() {
+    const pyodide = await loadPyodide({ fullStdLib: false })
+    await pyodide.runPythonAsync(`
+        def _lia_process_exception():
+            import sys
+            import traceback
+
+            summary = traceback.format_exception_only(sys.last_type, sys.last_value)[-1].strip()
+            if isinstance(sys.last_value, SyntaxError):
+                lines = [(sys.last_value.lineno, sys.last_value.offset)]
+            else:
+                frames = traceback.extract_tb(sys.last_traceback)
+                lines = [(frame.lineno, frame.colno) for frame in frames if frame.filename == '<exec>']
+            return summary, lines
+    `)
+    return pyodide
+}
+
 async function runPython(code, io) {
     const plot = document.getElementById(io.mplout)
     plot.innerHTML = ""
@@ -22,7 +40,7 @@ async function runPython(code, io) {
 
     if (!window.pyodide) {
         try {
-            window.pyodide = await loadPyodide({ fullStdLib: false });
+            window.pyodide = await loadPython()
             window.pyodide_running = true
         } catch (e) {
             io.liaerr(e.message)
@@ -51,7 +69,13 @@ async function runPython(code, io) {
             io.liaout("")
         }
     } catch (e) {
-        io.liaerr(e.message)
+        if (e instanceof window.pyodide.ffi.PythonError) {
+            const out = await window.pyodide.runPythonAsync("_lia_process_exception()")
+            const [errString, lines] = out.toJs({create_pyproxies : false})
+            io.liaerr(e.message, errString, lines)
+        } else {
+            io.liaerr(e.message)
+        }
     }
     io.liaout("LIA: stop")
     window.pyodide_running = false
@@ -78,7 +102,7 @@ async function run_exec() {
             stdout: {batched: console.log},
             stderr: {batched: console.error},
             liaout: send.lia,
-            liaerr: (text) => send.lia(text, false),
+            liaerr: (text) => send.lia(`HTML: <pre style='color: red'>${text}</pre>`),
             clearOut: true,
             mplout: "target_@0"
         }
@@ -124,7 +148,20 @@ async function run_eval() {
             }
         },
         liaout: send.lia,
-        liaerr: console.error,
+        liaerr: (fullMessage, lineMessage, lines) => {
+            window.console.log(lines)
+            let lineErrors = [[]]
+            for (const [i, line] of lines.entries()) {
+                const last = (i + 1 == lines.length)
+                lineErrors[0].push({
+                    row: line[0] - 1,  // Off-by-one; not sure why
+                    column: line[1],
+                    text: last ? lineMessage : "Called from here",
+                    type: last ? "error" : "warning"
+                })
+            }
+            send.lia(fullMessage, lineErrors, false)
+        },
         clearOut: false,
         mplout: "target_@0"
     }
