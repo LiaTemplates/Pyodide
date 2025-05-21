@@ -14,89 +14,82 @@ comment:  Use the real Python in your LiaScript courses, by loading this
 
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
+@onload
+async function runPython(code, io) {
+    const plot = document.getElementById(io.mplout)
+    plot.innerHTML = ""
+    document.pyodideMplTarget = plot
+
+    if (!window.pyodide) {
+        try {
+            window.pyodide = await loadPyodide({ fullStdLib: false });
+            window.pyodide_running = true
+        } catch (e) {
+            io.liaerr(e.message)
+            io.liaout("LIA: stop")
+            return
+        }
+    }
+
+    try {
+        window.pyodide.setStdout(io.stdout)
+        window.pyodide.setStderr(io.stderr)
+        window.pyodide.setStdin({
+            stdin: () => {
+                return prompt("stdin")
+            }
+        })
+
+        await window.pyodide.loadPackagesFromImports(code)
+        const rslt = await window.pyodide.runPythonAsync(code)
+
+        if (typeof rslt === 'string') {
+            io.liaout(rslt)
+        } else if (rslt !== undefined && typeof rslt.toString === 'function') {
+            io.liaout(rslt.toString())
+        } else if (io.clearOut) {
+            io.liaout("")
+        }
+    } catch (e) {
+        io.liaerr(e.message)
+    }
+    io.liaout("LIA: stop")
+    window.pyodide_running = false
+}
+
+window.runPython = runPython
+@end
+
 
 @Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
 
 @Pyodide.exec_
-<script run-once modify="# --python--\n">
-async function installPackagesManually_exec(msg) {
-    let module = msg.match(/ModuleNotFoundError: No module named '([^']+)/i)
+<script run-once modify="# --python--\n" type="text/python">
 
-    window.console.warn("Pyodide", msg)
-
-    if (!module) {
-        send.lia(msg, false)
-
-    } else {
-        if (module.length > 1) {
-            module = module[1]
-
-            if (window.pyodide_modules.includes(module)) {
-                console.warn(msg)
-                send.lia(msg, false)
-            } else {
-                send.lia("downloading module => " + module)
-                window.pyodide_modules.push(module)
-                await window.pyodide.loadPackage(module)
-                await run_exec(code, true)
-            }
-        }
-    }
-}
-
-
-async function run_exec(code, force = false) {
-    if (!window.pyodide_running || force) {
+async function run_exec() {
+    const code = String.raw`# --python--
+@1
+# --python--
+`
+    if (!window.pyodide_running) {
         window.pyodide_running = true
 
-        const plot = document.getElementById('target_@0')
-        plot.innerHTML = ""
-        document.pyodideMplTarget = plot
-
-        if (!window.pyodide) {
-            try {
-                window.pyodide = await loadPyodide({ fullStdLib: false });
-                window.pyodide_modules = []
-                window.pyodide_running = true
-            } catch (e) {
-                send.lia(e.message, false)
-                send.lia("LIA: stop")
-            }
+        const io = {
+            stdout: {batched: console.log},
+            stderr: {batched: console.error},
+            liaout: send.lia,
+            liaerr: (text) => send.lia(text, false),
+            clearOut: true,
+            mplout: "target_@0"
         }
 
-        try {
-            window.pyodide.setStdout((text) => console.log(text))
-            window.pyodide.setStderr((text) => console.error(text))
-
-            window.pyodide.setStdin({
-                stdin: () => {
-                    return prompt("stdin")
-                }
-            })
-
-            window.pyodide.loadPackagesFromImports(code).then(async () => {
-                const rslt = await window.pyodide.runPython(code)
-    
-                if (rslt !== undefined) {
-                    send.lia(rslt)
-                } else {
-                    send.lia("")
-                }
-            }, installPackagesManually_exec);
-
-        } catch (e) {
-            installPackagesManually_exec(e.message)
-        }
-        send.lia("LIA: stop")
-        window.pyodide_running = false
+        await window.runPython(code, io)
     } else {
-        setTimeout(() => { run_exec(code) }, 1000)
+        setTimeout(run_exec, 1000)
     }
 }
 
-setTimeout(() => { run_exec(`# --python--
-@1 # --python--
-`) }, 500)
+setTimeout(run_exec, 500)
 
 "calculating, please wait ..."
 
@@ -106,119 +99,50 @@ setTimeout(() => { run_exec(`# --python--
 @end
 
 
-
-
-
 @Pyodide.eval: @Pyodide.eval_(@uid)
 
 @Pyodide.eval_
 <script>
-async function installPackagesManually_eval(msg) {
-    let module = msg.match(/ModuleNotFoundError: No module named '([^']+)/i);
 
-    window.console.warn('Pyodide', msg);
-
-    if (!module) {
-        const err = msg.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i);
-
-        if (err !== null && err.length >= 3) {
-            send.lia(msg,
-                [[{
-                    row: parseInt(err[1]) - 1,
-                    column: 1,
-                    text: err[2],
-                    type: 'error',
-                }]],
-                false);
-        } else {
-            console.error(msg);
-        }
-    } else if (module.length > 1) {
-        module = module[1];
-
-        if (window.pyodide_modules.includes(module)) {
-            console.error(msg);
-        } else {
-            console.debug('downloading module =>', module);
-            window.pyodide_modules.push(module);
-            await window.pyodide.loadPackage(module);
-            await run_eval(code);
-        }
-    }
-}
-
-async function run_eval(code) {
-
-    const plot = document.getElementById('target_@0')
-    plot.innerHTML = ""
-    document.pyodideMplTarget = plot
-
-    if (!window.pyodide) {
-        try {
-            window.pyodide = await loadPyodide({ fullStdLib: false });
-            window.pyodide_modules = []
-            window.pyodide_running = true
-        } catch (e) {
-            console.error(e.message)
-            send.lia("LIA: stop")
-        }
-    }
-
-    try {
-        window.pyodide.setStdout({
+async function run_eval() {
+    const code = "@'input"
+    const io = {
+        stdout: {
             write: (buffer) => {
                 const decoder = new TextDecoder()
                 const string = decoder.decode(buffer)
                 console.stream(string)
                 return buffer.length
             }
-        })
-
-        window.pyodide.setStderr({
+        },
+        stderr: {
             write: (buffer) => {
                 const decoder = new TextDecoder()
                 const string = decoder.decode(buffer)
                 console.error(string)
                 return buffer.length
             }
-        })
-
-        window.pyodide.setStdin({
-            stdin: () => {
-                return prompt("stdin")
-            }
-        })
-
-        window.pyodide.loadPackagesFromImports(code).then(async () => {
-            const rslt = await window.pyodide.runPython(code)
-
-            if (typeof rslt === 'string') {
-                send.lia(rslt)
-            } else if (rslt && typeof rslt.toString === 'function') {
-                send.lia(rslt.toString());
-            }
-        }, installPackagesManually_eval);
-
-    } catch (e) {
-        installPackagesManually_eval(e.message);
+        },
+        liaout: send.lia,
+        liaerr: console.error,
+        clearOut: false,
+        mplout: "target_@0"
     }
-    send.lia("LIA: stop")
-    window.pyodide_running = false
+
+    await window.runPython(code, io)
 }
 
 if (window.pyodide_running) {
-  setTimeout(() => {
-    console.warn("Another process is running, wait until finished")
-  }, 500)
-  "LIA: stop"
+    setTimeout(() => {
+        console.warn("Another process is running, wait until finished")
+    }, 500)
+
+    "LIA: stop"
 } else {
-  window.pyodide_running = true
+    window.pyodide_running = true
+    setTimeout(run_eval, 500)
 
-  setTimeout(() => {
-    run_eval(`@input`)
-  }, 500)
-
-  "LIA: wait"
+    "LIA: wait"
 }
 </script>
 
@@ -356,21 +280,7 @@ plt.show()
                                    --{{0}}--
 
 Only the Python standard library and `six` are available at the beginning, other
-libraries are globally loaded, if defined within the script. If you know, that certain modules are required, you can speed up their loading by defining them
-manually in your `onload` macro, as it is shown below.
-
-
-``` markdown
-<!--
-author:  ...
-email:   ...
-
-import:  https://github.com/LiaTemplates/Pyodide
-
-@onload: window.py_packages = ["matplotlib", "numpy"]
--->
-...
-```
+libraries are globally loaded, if defined within the script.
 
 > __Note:__ loading large packages such as `scipy` may take some time, since
 >           they might require to download many MB of precompiled packages.
@@ -394,7 +304,7 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
 async function run(code, force=false) {
     if (!window.pyodide_running || force) {
         window.pyodide_running = true
-    
+
         const plot = document.getElementById('target_@0')
         plot.innerHTML = ""
         document.pyodideMplTarget = plot
@@ -417,9 +327,9 @@ async function run(code, force=false) {
             window.pyodide.setStdin({stdin: () => {
             return prompt("stdin")
             }})
-        
+
             const rslt = await window.pyodide.runPython(code)
-            
+
             if (rslt !== undefined) {
                 send.lia(rslt)
             } else {
@@ -429,10 +339,10 @@ async function run(code, force=false) {
             let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
             window.console.warn("Pyodide", e.message)
-        
+
             if (!module) {
                 send.lia(e.message, false)
-            
+
             } else {
                 if (module.length > 1) {
                     module = module[1]
@@ -504,8 +414,8 @@ async function run(code) {
 
         window.pyodide.setStdin({stdin: () => {
           return prompt("stdin")
-        }}) 
-       
+        }})
+
         const rslt = await window.pyodide.runPython(code)
 
         if (typeof rslt === 'string') {
@@ -515,7 +425,7 @@ async function run(code) {
         let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
 
         window.console.warn("Pyodide", e.message)
-    
+
         if (!module) {
             const err = e.message.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i)
 
