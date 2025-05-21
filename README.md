@@ -16,6 +16,8 @@ script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @onload
 async function runPython(code, io) {
+    window.pyodide_running = true
+
     const plot = document.getElementById(io.mplout)
     plot.innerHTML = ""
     document.pyodideMplTarget = plot
@@ -23,10 +25,10 @@ async function runPython(code, io) {
     if (!window.pyodide) {
         try {
             window.pyodide = await loadPyodide({ fullStdLib: false });
-            window.pyodide_running = true
         } catch (e) {
             io.liaerr(e.message)
             io.liaout("LIA: stop")
+            window.pyodide_running = false
             return
         }
     }
@@ -71,25 +73,23 @@ async function run_exec() {
 @1
 # --python--
 `
-    if (!window.pyodide_running) {
-        window.pyodide_running = true
-
-        const io = {
-            stdout: {batched: console.log},
-            stderr: {batched: console.error},
-            liaout: send.lia,
-            liaerr: (text) => send.lia(text, false),
-            clearOut: true,
-            mplout: "target_@0"
-        }
-
+    const io = {
+        stdout: {batched: console.log},
+        stderr: {batched: console.error},
+        liaout: send.lia,
+        liaerr: (text) => send.lia(text, false),
+        clearOut: true,
+        mplout: "target_@0"
+    }
+    // This can run before the @onload macro.
+    if (!window.pyodide_running && window.runPython) {
         await window.runPython(code, io)
     } else {
         setTimeout(run_exec, 1000)
     }
 }
 
-setTimeout(run_exec, 500)
+run_exec()
 
 "calculating, please wait ..."
 
@@ -133,15 +133,10 @@ async function run_eval() {
 }
 
 if (window.pyodide_running) {
-    setTimeout(() => {
-        console.warn("Another process is running, wait until finished")
-    }, 500)
-
+    console.warn("Another process is running, wait until finished")
     "LIA: stop"
 } else {
-    window.pyodide_running = true
-    setTimeout(run_eval, 500)
-
+    run_eval()
     "LIA: wait"
 }
 </script>
