@@ -12,6 +12,8 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
+@@ snippet start
+
 script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
 
 @onload
@@ -193,6 +195,8 @@ if (window.pyodide_running) {
 <div id="target_@0"></div>
 @end
 
+@@ snippet stop
+
 -->
 
 # Pyodide - Template
@@ -330,6 +334,31 @@ libraries are globally loaded, if defined within the script.
 >           they might require to download many MB of precompiled packages.
 
 ## Implementation
+<!--
+
+@loadsnippet
+<script style="display: block" modify="false" run-once="true">
+async function loadSnippet() {
+    const mdPath = document.location.search.slice(1)  // Remove "?"
+    try {
+        const response = await fetch(mdPath)
+        if (!response.ok) {
+            throw new Error("Got a non-okay response")
+        }
+        const text = await response.text()
+        const snippet = text.split("@@ snippet start")[1].split("@@ snippet stop")[0].trim()
+        send.lia("LIASCRIPT:\n```` @0\n" + snippet.replaceAll("````", "XXXX") + "\n````")
+    } catch (e) {
+        send.lia(`HTML: <span style='color: red'>Something went wrong, could not load <a href='${mdPath}'>${mdPath}</a></span>`)
+    }
+}
+loadSnippet()
+
+"loading source"
+</script>
+@end
+
+-->
 
                                    --{{0}}--
 This macro implementation only adds a simple script-tag that pushes the code of
@@ -337,191 +366,8 @@ your snippet directly to Pyodide. The `@onload` macro is required to instantiate
 Pyodide and load the required libraries, which might require some time, since
 the loaded packages might be quite large.
 
+@loadsnippet(js)
 
-```` js
-script:   https://cdn.jsdelivr.net/pyodide/v0.24.0/full/pyodide.js
-
-@Pyodide.exec: @Pyodide.exec_(@uid,```@0```)
-
-@Pyodide.exec_
-<script>
-async function run(code, force=false) {
-    if (!window.pyodide_running || force) {
-        window.pyodide_running = true
-
-        const plot = document.getElementById('target_@0')
-        plot.innerHTML = ""
-        document.pyodideMplTarget = plot
-
-        if (!window.pyodide) {
-            try {
-                window.pyodide = await loadPyodide({fullStdLib: false})
-                window.pyodide_modules = []
-                window.pyodide_running = true
-            } catch(e) {
-                send.lia(e.message, false)
-                send.lia("LIA: stop")
-            }
-        }
-
-        try {
-            window.pyodide.setStdout((text) => console.log(text))
-            window.pyodide.setStderr((text) => console.error(text))
-
-            window.pyodide.setStdin({stdin: () => {
-            return prompt("stdin")
-            }})
-
-            const rslt = await window.pyodide.runPython(code)
-
-            if (rslt !== undefined) {
-                send.lia(rslt)
-            } else {
-                send.lia("")
-            }
-        } catch(e) {
-            let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
-
-            window.console.warn("Pyodide", e.message)
-
-            if (!module) {
-                send.lia(e.message, false)
-
-            } else {
-                if (module.length > 1) {
-                    module = module[1]
-
-                    if (window.pyodide_modules.includes(module)) {
-                        console.warn(e.message)
-                        send.lia(e.message, false)
-                    } else {
-                        send.lia("downloading module => " + module)
-                        window.pyodide_modules.push(module)
-                        await window.pyodide.loadPackage(module)
-                        await run(code, true)
-                    }
-                }
-            }
-        }
-        send.lia("LIA: stop")
-        window.pyodide_running = false
-    } else {
-        setTimeout(() => { run(code) }, 1000)
-    }
-}
-
-setTimeout(() => { run(`@1`) }, 500)
-
-"calculating, please wait ..."
-
-</script>
-
-<div id="target_@0"></div>
-@end
-
-
-@Pyodide.eval: @Pyodide.eval_(@uid)
-
-@Pyodide.eval_
-<script>
-async function run(code) {
-
-    const plot = document.getElementById('target_@0')
-    plot.innerHTML = ""
-    document.pyodideMplTarget = plot
-
-    if (!window.pyodide) {
-        try {
-            window.pyodide = await loadPyodide({fullStdLib: false})
-            window.pyodide_modules = []
-            window.pyodide_running = true
-        } catch(e) {
-            console.error(e.message)
-            send.lia("LIA: stop")
-        }
-    }
-
-    try {
-        window.pyodide.setStdout({ write: (buffer) => {
-            const decoder = new TextDecoder()
-            const string = decoder.decode(buffer)
-            console.stream(string)
-            return buffer.length
-        }})
-
-        window.pyodide.setStderr({ write: (buffer) => {
-            const decoder = new TextDecoder()
-            const string = decoder.decode(buffer)
-            console.error(string)
-            return buffer.length
-        }})
-
-        window.pyodide.setStdin({stdin: () => {
-          return prompt("stdin")
-        }})
-
-        const rslt = await window.pyodide.runPython(code)
-
-        if (typeof rslt === 'string') {
-            send.lia(rslt)
-        }
-    } catch(e) {
-        let module = e.message.match(/ModuleNotFoundError: No module named '([^']+)/i)
-
-        window.console.warn("Pyodide", e.message)
-
-        if (!module) {
-            const err = e.message.match(/File "<exec>", line (\d+).*\n((.*\n){1,3})/i)
-
-            if (err!== null && err.length >= 3) {
-                send.lia( e.message,
-                  [[{ row : parseInt(err[1]) - 1,
-                      column : 1,
-                      text : err[2],
-                      type : "error"
-                  }]],
-                  false)
-            } else {
-                console.error(e.message)
-            }
-        } else {
-            if (module.length > 1) {
-                module = module[1]
-
-                if (window.pyodide_modules.includes(module)) {
-                    console.error(e.message)
-                } else {
-                    console.debug("downloading module =>", module)
-                    window.pyodide_modules.push(module)
-                    await window.pyodide.loadPackage(module)
-                    await run(code)
-                }
-            }
-        }
-    }
-    send.lia("LIA: stop")
-    window.pyodide_running = false
-}
-
-if (window.pyodide_running) {
-  setTimeout(() => {
-    console.warn("Another process is running, wait until finished")
-  }, 500)
-  "LIA: stop"
-} else {
-  window.pyodide_running = true
-
-  setTimeout(() => {
-    run(`@input`)
-  }, 500)
-
-  "LIA: wait"
-}
-</script>
-
-<div id="target_@0"></div>
-@end
-````
 
                                    --{{1}}--
 If you want to minimize loading effort in your LiaScript project, you can also
