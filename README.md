@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.3.4
+version:  0.3.5
 language: en
 narrator: US English Male
 
@@ -12,7 +12,7 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://alpha.iodide.io).
 
-script:   https://cdn.jsdelivr.net/pyodide/v0.27.3/full/pyodide.js
+script:   https://cdn.jsdelivr.net/pyodide/v0.29.1/full/pyodide.js
 
 @onload
 async function loadPython() {
@@ -253,6 +253,7 @@ sys.version
 ```
 @Pyodide.eval
 
+
 --------------------------------------------------------------------------------
 
                                    --{{1}}--
@@ -261,29 +262,68 @@ function, as it is done in the last line below. This function converts your
 image into a base64 representation and passes this string to the DOM. It is currently only possible to plot one figure per snippet.
 
 ```python
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Button, Slider
+from matplotlib.widgets import Slider
 
-t = np.arange(0.0, 2.0, 0.01)
-s = np.sin(2 * np.pi * t)
+# The parametrized function to be plotted
+def f(variable, m):
+    return np.sin(np.pi*variable*m)**2//np.sin(np.pi*variable)**2
 
-fig, ax = plt.subplots()
-ax.plot(t, s)
+def main():
+    x_min = -1.1
+    x_max = 1.1
+    x_num = 1000
+    y_min = 0
+    y_max = 100
+    x_label = "$\\frac{\\Delta k \\cdot a }{2\\pi}$"
+    #x_label = "xlabel"
+    #y_label = "ylabel"
+    y_label = "$\\|F|^2$"
 
-ax.grid(True, linestyle='-.')
-ax.tick_params(labelcolor='r', labelsize='medium', width=3)
+    # Define slider parameters
+    init_m = 4
+    m_min = 1
+    m_max = 30
+    m_step = 1
+    slider_label = "Anzahl der Atome"
+ 
+    x = np.linspace(x_min, x_max, x_num)
+    # Create the figure and the line that we will manipulate
+    fig, ax = plt.subplots()
+    line, = ax.plot(x, f(x, init_m), lw=3)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_ylim(y_min, y_max)
+    # adjust the main plot to make room for the sliders
+    fig.subplots_adjust(left=0.25, bottom=0.25)
+    # Make a horizontal slider to control the frequency.
+    axfreq = fig.add_axes([0.25, 0.1, 0.65, 0.03])
+    m_slider = Slider(
+        ax=axfreq,
+        label=slider_label,
+        valmin=m_min,
+        valmax=m_max,
+        valstep=m_step,
+        valinit=init_m,
+    )
+    def update(val):
+        line.set_ydata(f(x, m_slider.val))
+        fig.canvas.draw_idle()
+    def reset(event):
+        m_slider.reset()
+    # register the update function with each slider
+    m_slider.on_changed(update)
 
-plt.show()
-```
-@Pyodide.eval
+    resetax = fig.add_axes([0.8, 0.025, 0.1, 0.04])
+    button = Button(resetax, 'Reset', hovercolor='0.975')
+    button.on_clicked(reset)  
 
+    plt.show()
 
-``` python
-import pandas as pd
-d = {'col1': [1, 5, 7], 'col2': [3, .4, -2], 'col3':["yes", "no","blue"]};
-df = pd.DataFrame(data=d);
-df
-print(df)
+main()
 ```
 @Pyodide.eval
 
