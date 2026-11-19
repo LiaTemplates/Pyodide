@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.4.0
+version:  0.4.1
 language: en
 narrator: US English Male
 
@@ -12,7 +12,7 @@ comment:  Use the real Python in your LiaScript courses, by loading this
           template. For more information and to see, which Python-modules are
           accessible visit the [pyodide-website](https://pyodide.org).
 
-script:   https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js
+script:   https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.js
 
 @onload
 async function loadPython() {
@@ -36,6 +36,14 @@ async function loadPython() {
             sys.stdout.flush()
             sys.stderr.flush()
 
+        def _lia_close_figures():
+            import sys
+
+            # all code blocks share one interpreter, figures of former runs
+            # would otherwise be shown again by plt.show()
+            if "matplotlib.pyplot" in sys.modules:
+                sys.modules["matplotlib.pyplot"].close("all")
+
         def _lia_input(prompt=""):
             import sys
             import js
@@ -57,6 +65,15 @@ async function loadPython() {
 
         import builtins
         builtins.input = _lia_input
+
+        # matplotlib's Pyodide backend draws with float coordinates,
+        # which matplotlib >= 3.10 reports as deprecated on every plot
+        import warnings
+        warnings.filterwarnings(
+            "ignore",
+            message="The [a-z0-9_]+ parameter as float was deprecated",
+            category=DeprecationWarning,
+        )
     `)
     return pyodide
 }
@@ -88,6 +105,7 @@ async function runPython(code, io) {
         // input() reads from here, if the macro has a terminal
         window.pyodideReadLine = io.readline || null
 
+        await window.pyodide.runPythonAsync("_lia_close_figures()")
         await window.pyodide.loadPackagesFromImports(code)
         const rslt = await window.pyodide.runPythonAsync(code)
 
@@ -268,7 +286,7 @@ change it, as you wish.
 
    or use a fixed version, which will not change:
 
-   `import: https://raw.githubusercontent.com/LiaTemplates/Pyodide/0.4.0/README.md`
+   `import: https://raw.githubusercontent.com/LiaTemplates/Pyodide/0.4.1/README.md`
 
 2. Copy the definitions into your Project
 
@@ -433,7 +451,7 @@ The macros only add a script-tag that hands the code of your snippet to
 
 
 ```` js
-script:   https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js
+script:   https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.js
 
 @onload
 async function loadPython() {
@@ -457,6 +475,14 @@ async function loadPython() {
             sys.stdout.flush()
             sys.stderr.flush()
 
+        def _lia_close_figures():
+            import sys
+
+            # all code blocks share one interpreter, figures of former runs
+            # would otherwise be shown again by plt.show()
+            if "matplotlib.pyplot" in sys.modules:
+                sys.modules["matplotlib.pyplot"].close("all")
+
         def _lia_input(prompt=""):
             import sys
             import js
@@ -478,6 +504,15 @@ async function loadPython() {
 
         import builtins
         builtins.input = _lia_input
+
+        # matplotlib's Pyodide backend draws with float coordinates,
+        # which matplotlib >= 3.10 reports as deprecated on every plot
+        import warnings
+        warnings.filterwarnings(
+            "ignore",
+            message="The [a-z0-9_]+ parameter as float was deprecated",
+            category=DeprecationWarning,
+        )
     `)
     return pyodide
 }
@@ -509,6 +544,7 @@ async function runPython(code, io) {
         // input() reads from here, if the macro has a terminal
         window.pyodideReadLine = io.readline || null
 
+        await window.pyodide.runPythonAsync("_lia_close_figures()")
         await window.pyodide.loadPackagesFromImports(code)
         const rslt = await window.pyodide.runPythonAsync(code)
 
