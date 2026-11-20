@@ -2,7 +2,7 @@
 
 author:   André Dietrich
 email:    LiaScript@web.de
-version:  0.4.1
+version:  0.5.0
 language: en
 narrator: US English Male
 
@@ -17,47 +17,156 @@ script:   https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.js
 @onload
 async function loadPython() {
     const pyodide = await loadPyodide({ fullStdLib: false })
+    pyodide.setStdin({ stdin: () => prompt("stdin") })
     await pyodide.runPythonAsync(`
-        def _lia_process_exception():
-            import sys
+        import sys
+        import contextvars
+
+        # Every run gets its own io (output, input, plot target) through a
+        # context variable, a run that waits for input() can be passed by
+        # other runs. The namespace is shared by all code blocks.
+        _lia_io = contextvars.ContextVar("_lia_io", default=None)
+
+        class _LiaBuffer:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def write(self, data):
+                self.stream.write(bytes(data).decode("utf-8", "replace"))
+                return len(data)
+
+            def flush(self):
+                pass
+
+        class _LiaStream:
+            def __init__(self, name, fallback):
+                self.name = name
+                self.fallback = fallback
+                self.encoding = "utf-8"
+                self.errors = "strict"
+                self.buffer = _LiaBuffer(self)
+
+            def write(self, text):
+                io = _lia_io.get()
+                if io is None:
+                    return self.fallback.write(text)
+                getattr(io, self.name)(text)
+                return len(text)
+
+            def flush(self):
+                pass
+
+            def isatty(self):
+                return False
+
+            def writable(self):
+                return True
+
+        sys.stdout = _LiaStream("stdout", sys.stdout)
+        sys.stderr = _LiaStream("stderr", sys.stderr)
+
+        # Callbacks from JavaScript (e.g. matplotlib widgets) run outside of
+        # any run, they keep the io of the run that created them
+        import inspect
+        import pyodide.ffi
+
+        _lia_create_proxy = pyodide.ffi.create_proxy
+
+        def _lia_proxy(obj, *args, **kwargs):
+            io = _lia_io.get()
+            if io is not None and (inspect.isfunction(obj) or inspect.ismethod(obj)):
+                func = obj
+
+                def obj(*a, **kw):
+                    if _lia_io.get() is not None:
+                        return func(*a, **kw)
+                    token = _lia_io.set(io)
+                    try:
+                        return func(*a, **kw)
+                    finally:
+                        _lia_io.reset(token)
+
+            return _lia_create_proxy(obj, *args, **kwargs)
+
+        pyodide.ffi.create_proxy = _lia_proxy
+
+        def _lia_plot_target():
+            import js
+
+            io = _lia_io.get()
+            if io is not None:
+                js.document.pyodideMplTarget = js.document.getElementById(io.mplout)
+
+        def _lia_figures():
+            plt = sys.modules.get("matplotlib.pyplot")
+            return set(plt.get_fignums()) if plt else set()
+
+        # plt.show() draws all open figures, so figures of finished runs are
+        # closed when the next run starts, figures of waiting runs are kept
+        _lia_finished_figures = set()
+
+        def _lia_close_finished_figures():
+            plt = sys.modules.get("matplotlib.pyplot")
+            if plt:
+                for number in _lia_finished_figures & _lia_figures():
+                    plt.close(number)
+            _lia_finished_figures.clear()
+
+        def _lia_error(error):
             import traceback
 
-            summary = traceback.format_exception_only(sys.last_type, sys.last_value)[-1].strip()
-            if isinstance(sys.last_value, SyntaxError):
-                lines = [(sys.last_value.lineno, sys.last_value.offset)]
+            summary = traceback.format_exception_only(type(error), error)[-1].strip()
+            if isinstance(error, SyntaxError):
+                lines = [(error.lineno, error.offset)]
             else:
-                frames = traceback.extract_tb(sys.last_traceback)
-                lines = [(frame.lineno, frame.colno) for frame in frames if frame.filename == '<exec>']
-            return summary, lines
+                frames = traceback.extract_tb(error.__traceback__)
+                lines = [(frame.lineno, frame.colno) for frame in frames if frame.filename == "<exec>"]
 
-        def _lia_flush_streams():
-            import sys
+            details = traceback.TracebackException.from_exception(error)
+            details.stack = traceback.StackSummary.from_list(
+                [frame for frame in details.stack if frame.filename == "<exec>"]
+            )
+            return ["".join(details.format()), summary, lines]
 
-            sys.stdout.flush()
-            sys.stderr.flush()
+        async def _lia_run(code, io):
+            import js
+            from pyodide.code import eval_code_async
+            from pyodide.ffi import to_js
 
-        def _lia_close_figures():
-            import sys
-
-            # all code blocks share one interpreter, figures of former runs
-            # would otherwise be shown again by plt.show()
-            if "matplotlib.pyplot" in sys.modules:
-                sys.modules["matplotlib.pyplot"].close("all")
+            _lia_io.set(io)
+            _lia_close_finished_figures()
+            _lia_plot_target()
+            before = _lia_figures()
+            try:
+                result = await eval_code_async(code, globals())
+                output = {"result": None if result is None else str(result)}
+            except BaseException as error:
+                output = {"error": _lia_error(error)}
+            finally:
+                _lia_finished_figures.update(_lia_figures() - before)
+            return to_js(output, dict_converter=js.Object.fromEntries)
 
         def _lia_input(prompt=""):
-            import sys
-            import js
             from pyodide.ffi import can_run_sync, run_sync
 
             prompt = str(prompt)
             sys.stdout.write(prompt)
-            sys.stdout.flush()
 
-            # run_sync suspends Python until the terminal sends a line,
+            # run_sync suspends this run until the terminal sends a line,
             # it needs JSPI (JavaScript Promise Integration) in the browser
-            if js.pyodideReadLine and can_run_sync():
-                return str(run_sync(js.pyodideReadLine())).rstrip("\\r\\n")
+            io = _lia_io.get()
+            readline = getattr(io, "readline", None) if io is not None else None
+            if readline and can_run_sync():
+                from pyodide.ffi import JsException
 
+                try:
+                    line = run_sync(readline())
+                except JsException:
+                    raise KeyboardInterrupt from None  # stop button
+                _lia_plot_target()  # another run might have changed it
+                return str(line).rstrip("\\r\\n")
+
+            import js
             line = js.prompt(prompt)
             line = "" if line is None else str(line)
             print(line)
@@ -74,60 +183,67 @@ async function loadPython() {
             message="The [a-z0-9_]+ parameter as float was deprecated",
             category=DeprecationWarning,
         )
-    `)
+    `, { filename: "<lia-pyodide>" })
+    window.pyodideRun = pyodide.globals.get("_lia_run")
     return pyodide
+}
+
+// Runs are queued and executed one after the other, in the order they were
+// started. A run that waits for input() leaves the queue and rejoins it
+// after the answer, so other code blocks can run in the meantime.
+function pyodideQueue() {
+    let release
+    const turn = window.pyodideQueueTail || Promise.resolve()
+    window.pyodideQueueTail = turn.then(() => new Promise((resolve) => { release = resolve }))
+    return turn.then(() => release)
 }
 
 async function runPython(code, io) {
     const plot = document.getElementById(io.mplout)
-    plot.innerHTML = ""
-    document.pyodideMplTarget = plot
+    if (plot) {
+        plot.innerHTML = ""
+    }
 
-    if (!window.pyodide) {
-        try {
-            window.pyodide = await loadPython()
-            window.pyodide_running = true
-        } catch (e) {
-            io.liaerr(e.message)
-            io.liaout("LIA: stop")
-            return
+    let release = await pyodideQueue()
+    const runIO = Object.assign({}, io)
+    if (io.readline) {
+        runIO.readline = async () => {
+            release()
+            try {
+                return await io.readline()
+            } finally {
+                release = await pyodideQueue()
+            }
         }
     }
 
     try {
-        window.pyodide.setStdout(io.stdout)
-        window.pyodide.setStderr(io.stderr)
-        window.pyodide.setStdin({
-            stdin: () => {
-                return prompt("stdin")
-            }
+        // Pyodide is loaded once, all runs wait for the same promise
+        window.pyodideReady = window.pyodideReady || loadPython()
+        window.pyodide = await window.pyodideReady
+
+        await window.pyodide.loadPackagesFromImports(code, {
+            messageCallback: (msg) => io.stdout(msg + "\n"),
+            errorCallback: (msg) => io.stderr(msg + "\n")
         })
-        // input() reads from here, if the macro has a terminal
-        window.pyodideReadLine = io.readline || null
+        const out = await window.pyodideRun(code, runIO)
 
-        await window.pyodide.runPythonAsync("_lia_close_figures()")
-        await window.pyodide.loadPackagesFromImports(code)
-        const rslt = await window.pyodide.runPythonAsync(code)
-
-        if (typeof rslt === 'string') {
-            io.liaout(rslt)
-        } else if (rslt !== undefined && typeof rslt.toString === 'function') {
-            io.liaout(rslt.toString())
+        if (out.error) {
+            io.liaerr(...out.error)
+        } else if (out.result !== undefined) {
+            io.liaout(out.result)
         } else if (io.clearOut) {
             io.liaout("")
         }
     } catch (e) {
-        if (e instanceof window.pyodide.ffi.PythonError) {
-            const out = await window.pyodide.runPythonAsync("_lia_process_exception()")
-            const [errString, lines] = out.toJs({create_pyproxies : false})
-            io.liaerr(e.message, errString, lines)
-        } else {
-            io.liaerr(e.message)
+        if (!window.pyodide) {
+            window.pyodideReady = null
         }
+        io.liaerr(e.message)
+    } finally {
+        release()
     }
-    await window.pyodide.runPythonAsync("_lia_flush_streams()")
     io.liaout("LIA: stop")
-    window.pyodide_running = false
 }
 
 window.runPython = runPython
@@ -144,22 +260,24 @@ async function run_exec() {
 @1
 # --python--
 `
-    if (!window.pyodide_running) {
-        window.pyodide_running = true
-
-        const io = {
-            stdout: {batched: console.log},
-            stderr: {batched: console.error},
-            liaout: send.lia,
-            liaerr: (text) => send.lia(`HTML: <pre style='color: red'>${text}</pre>`),
-            clearOut: true,
-            mplout: "target_@0"
-        }
-
-        await window.runPython(code, io)
-    } else {
-        setTimeout(run_exec, 1000)
+    // print() is written to the browser console, line by line
+    let line = ""
+    const byLine = (log) => (text) => {
+        const lines = (line + text).split("\n")
+        line = lines.pop()
+        lines.forEach((l) => log(l))
     }
+
+    const io = {
+        stdout: byLine(console.log),
+        stderr: byLine(console.error),
+        liaout: send.lia,
+        liaerr: (text) => send.lia(`HTML: <pre style='color: red'>${text}</pre>`),
+        clearOut: true,
+        mplout: "target_@0"
+    }
+
+    await window.runPython(code, io)
 }
 
 setTimeout(run_exec, 500)
@@ -179,26 +297,13 @@ setTimeout(run_exec, 500)
 
 async function run_eval() {
     const code = "@'input"
+    let terminal = false
+
     const io = {
-        stdout: {
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                console.stream(string)
-                return buffer.length
-            }
-        },
-        stderr: {
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                send.log("error", '', [string])
-                return buffer.length
-            }
-        },
+        stdout: (text) => console.stream(text),
+        stderr: (text) => send.log("error", '', [text]),
         liaout: send.lia,
         liaerr: (fullMessage, lineMessage, lines) => {
-            window.console.log(lines)
             let lineErrors = [[]]
             lines = lines || []
             for (const [i, line] of lines.entries()) {
@@ -224,23 +329,13 @@ async function run_eval() {
             send.handle("stop", () => reject(new Error("KeyboardInterrupt")))
         })
     }
-    let terminal = false
 
     await window.runPython(code, io)
 }
 
-if (window.pyodide_running) {
-    setTimeout(() => {
-        console.warn("Another process is running, wait until finished")
-    }, 500)
+setTimeout(run_eval, 500)
 
-    "LIA: stop"
-} else {
-    window.pyodide_running = true
-    setTimeout(run_eval, 500)
-
-    "LIA: wait"
-}
+"LIA: wait"
 </script>
 
 <div id="target_@0"></div>
@@ -286,7 +381,7 @@ change it, as you wish.
 
    or use a fixed version, which will not change:
 
-   `import: https://raw.githubusercontent.com/LiaTemplates/Pyodide/0.4.1/README.md`
+   `import: https://raw.githubusercontent.com/LiaTemplates/Pyodide/0.5.0/README.md`
 
 2. Copy the definitions into your Project
 
@@ -312,6 +407,10 @@ sys.version
 
 `input()` reads from a terminal below the code block. As soon as your program
 asks for input, the terminal opens: type your answer and press Enter.
+Code blocks run one after the other, in the order they were started. A code
+block that waits for input steps aside, so other code blocks can be run in the
+meantime. All code blocks share one Python namespace, so variables defined in
+one block can be used in the others.
 
 ```python
 name = input("What is your name? ")
@@ -456,47 +555,156 @@ script:   https://cdn.jsdelivr.net/pyodide/v314.0.8/full/pyodide.js
 @onload
 async function loadPython() {
     const pyodide = await loadPyodide({ fullStdLib: false })
+    pyodide.setStdin({ stdin: () => prompt("stdin") })
     await pyodide.runPythonAsync(`
-        def _lia_process_exception():
-            import sys
+        import sys
+        import contextvars
+
+        # Every run gets its own io (output, input, plot target) through a
+        # context variable, a run that waits for input() can be passed by
+        # other runs. The namespace is shared by all code blocks.
+        _lia_io = contextvars.ContextVar("_lia_io", default=None)
+
+        class _LiaBuffer:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def write(self, data):
+                self.stream.write(bytes(data).decode("utf-8", "replace"))
+                return len(data)
+
+            def flush(self):
+                pass
+
+        class _LiaStream:
+            def __init__(self, name, fallback):
+                self.name = name
+                self.fallback = fallback
+                self.encoding = "utf-8"
+                self.errors = "strict"
+                self.buffer = _LiaBuffer(self)
+
+            def write(self, text):
+                io = _lia_io.get()
+                if io is None:
+                    return self.fallback.write(text)
+                getattr(io, self.name)(text)
+                return len(text)
+
+            def flush(self):
+                pass
+
+            def isatty(self):
+                return False
+
+            def writable(self):
+                return True
+
+        sys.stdout = _LiaStream("stdout", sys.stdout)
+        sys.stderr = _LiaStream("stderr", sys.stderr)
+
+        # Callbacks from JavaScript (e.g. matplotlib widgets) run outside of
+        # any run, they keep the io of the run that created them
+        import inspect
+        import pyodide.ffi
+
+        _lia_create_proxy = pyodide.ffi.create_proxy
+
+        def _lia_proxy(obj, *args, **kwargs):
+            io = _lia_io.get()
+            if io is not None and (inspect.isfunction(obj) or inspect.ismethod(obj)):
+                func = obj
+
+                def obj(*a, **kw):
+                    if _lia_io.get() is not None:
+                        return func(*a, **kw)
+                    token = _lia_io.set(io)
+                    try:
+                        return func(*a, **kw)
+                    finally:
+                        _lia_io.reset(token)
+
+            return _lia_create_proxy(obj, *args, **kwargs)
+
+        pyodide.ffi.create_proxy = _lia_proxy
+
+        def _lia_plot_target():
+            import js
+
+            io = _lia_io.get()
+            if io is not None:
+                js.document.pyodideMplTarget = js.document.getElementById(io.mplout)
+
+        def _lia_figures():
+            plt = sys.modules.get("matplotlib.pyplot")
+            return set(plt.get_fignums()) if plt else set()
+
+        # plt.show() draws all open figures, so figures of finished runs are
+        # closed when the next run starts, figures of waiting runs are kept
+        _lia_finished_figures = set()
+
+        def _lia_close_finished_figures():
+            plt = sys.modules.get("matplotlib.pyplot")
+            if plt:
+                for number in _lia_finished_figures & _lia_figures():
+                    plt.close(number)
+            _lia_finished_figures.clear()
+
+        def _lia_error(error):
             import traceback
 
-            summary = traceback.format_exception_only(sys.last_type, sys.last_value)[-1].strip()
-            if isinstance(sys.last_value, SyntaxError):
-                lines = [(sys.last_value.lineno, sys.last_value.offset)]
+            summary = traceback.format_exception_only(type(error), error)[-1].strip()
+            if isinstance(error, SyntaxError):
+                lines = [(error.lineno, error.offset)]
             else:
-                frames = traceback.extract_tb(sys.last_traceback)
-                lines = [(frame.lineno, frame.colno) for frame in frames if frame.filename == '<exec>']
-            return summary, lines
+                frames = traceback.extract_tb(error.__traceback__)
+                lines = [(frame.lineno, frame.colno) for frame in frames if frame.filename == "<exec>"]
 
-        def _lia_flush_streams():
-            import sys
+            details = traceback.TracebackException.from_exception(error)
+            details.stack = traceback.StackSummary.from_list(
+                [frame for frame in details.stack if frame.filename == "<exec>"]
+            )
+            return ["".join(details.format()), summary, lines]
 
-            sys.stdout.flush()
-            sys.stderr.flush()
+        async def _lia_run(code, io):
+            import js
+            from pyodide.code import eval_code_async
+            from pyodide.ffi import to_js
 
-        def _lia_close_figures():
-            import sys
-
-            # all code blocks share one interpreter, figures of former runs
-            # would otherwise be shown again by plt.show()
-            if "matplotlib.pyplot" in sys.modules:
-                sys.modules["matplotlib.pyplot"].close("all")
+            _lia_io.set(io)
+            _lia_close_finished_figures()
+            _lia_plot_target()
+            before = _lia_figures()
+            try:
+                result = await eval_code_async(code, globals())
+                output = {"result": None if result is None else str(result)}
+            except BaseException as error:
+                output = {"error": _lia_error(error)}
+            finally:
+                _lia_finished_figures.update(_lia_figures() - before)
+            return to_js(output, dict_converter=js.Object.fromEntries)
 
         def _lia_input(prompt=""):
-            import sys
-            import js
             from pyodide.ffi import can_run_sync, run_sync
 
             prompt = str(prompt)
             sys.stdout.write(prompt)
-            sys.stdout.flush()
 
-            # run_sync suspends Python until the terminal sends a line,
+            # run_sync suspends this run until the terminal sends a line,
             # it needs JSPI (JavaScript Promise Integration) in the browser
-            if js.pyodideReadLine and can_run_sync():
-                return str(run_sync(js.pyodideReadLine())).rstrip("\\r\\n")
+            io = _lia_io.get()
+            readline = getattr(io, "readline", None) if io is not None else None
+            if readline and can_run_sync():
+                from pyodide.ffi import JsException
 
+                try:
+                    line = run_sync(readline())
+                except JsException:
+                    raise KeyboardInterrupt from None  # stop button
+                _lia_plot_target()  # another run might have changed it
+                return str(line).rstrip("\\r\\n")
+
+            import js
             line = js.prompt(prompt)
             line = "" if line is None else str(line)
             print(line)
@@ -513,60 +721,67 @@ async function loadPython() {
             message="The [a-z0-9_]+ parameter as float was deprecated",
             category=DeprecationWarning,
         )
-    `)
+    `, { filename: "<lia-pyodide>" })
+    window.pyodideRun = pyodide.globals.get("_lia_run")
     return pyodide
+}
+
+// Runs are queued and executed one after the other, in the order they were
+// started. A run that waits for input() leaves the queue and rejoins it
+// after the answer, so other code blocks can run in the meantime.
+function pyodideQueue() {
+    let release
+    const turn = window.pyodideQueueTail || Promise.resolve()
+    window.pyodideQueueTail = turn.then(() => new Promise((resolve) => { release = resolve }))
+    return turn.then(() => release)
 }
 
 async function runPython(code, io) {
     const plot = document.getElementById(io.mplout)
-    plot.innerHTML = ""
-    document.pyodideMplTarget = plot
+    if (plot) {
+        plot.innerHTML = ""
+    }
 
-    if (!window.pyodide) {
-        try {
-            window.pyodide = await loadPython()
-            window.pyodide_running = true
-        } catch (e) {
-            io.liaerr(e.message)
-            io.liaout("LIA: stop")
-            return
+    let release = await pyodideQueue()
+    const runIO = Object.assign({}, io)
+    if (io.readline) {
+        runIO.readline = async () => {
+            release()
+            try {
+                return await io.readline()
+            } finally {
+                release = await pyodideQueue()
+            }
         }
     }
 
     try {
-        window.pyodide.setStdout(io.stdout)
-        window.pyodide.setStderr(io.stderr)
-        window.pyodide.setStdin({
-            stdin: () => {
-                return prompt("stdin")
-            }
+        // Pyodide is loaded once, all runs wait for the same promise
+        window.pyodideReady = window.pyodideReady || loadPython()
+        window.pyodide = await window.pyodideReady
+
+        await window.pyodide.loadPackagesFromImports(code, {
+            messageCallback: (msg) => io.stdout(msg + "\n"),
+            errorCallback: (msg) => io.stderr(msg + "\n")
         })
-        // input() reads from here, if the macro has a terminal
-        window.pyodideReadLine = io.readline || null
+        const out = await window.pyodideRun(code, runIO)
 
-        await window.pyodide.runPythonAsync("_lia_close_figures()")
-        await window.pyodide.loadPackagesFromImports(code)
-        const rslt = await window.pyodide.runPythonAsync(code)
-
-        if (typeof rslt === 'string') {
-            io.liaout(rslt)
-        } else if (rslt !== undefined && typeof rslt.toString === 'function') {
-            io.liaout(rslt.toString())
+        if (out.error) {
+            io.liaerr(...out.error)
+        } else if (out.result !== undefined) {
+            io.liaout(out.result)
         } else if (io.clearOut) {
             io.liaout("")
         }
     } catch (e) {
-        if (e instanceof window.pyodide.ffi.PythonError) {
-            const out = await window.pyodide.runPythonAsync("_lia_process_exception()")
-            const [errString, lines] = out.toJs({create_pyproxies : false})
-            io.liaerr(e.message, errString, lines)
-        } else {
-            io.liaerr(e.message)
+        if (!window.pyodide) {
+            window.pyodideReady = null
         }
+        io.liaerr(e.message)
+    } finally {
+        release()
     }
-    await window.pyodide.runPythonAsync("_lia_flush_streams()")
     io.liaout("LIA: stop")
-    window.pyodide_running = false
 }
 
 window.runPython = runPython
@@ -583,22 +798,24 @@ async function run_exec() {
 @1
 # --python--
 `
-    if (!window.pyodide_running) {
-        window.pyodide_running = true
-
-        const io = {
-            stdout: {batched: console.log},
-            stderr: {batched: console.error},
-            liaout: send.lia,
-            liaerr: (text) => send.lia(`HTML: <pre style='color: red'>${text}</pre>`),
-            clearOut: true,
-            mplout: "target_@0"
-        }
-
-        await window.runPython(code, io)
-    } else {
-        setTimeout(run_exec, 1000)
+    // print() is written to the browser console, line by line
+    let line = ""
+    const byLine = (log) => (text) => {
+        const lines = (line + text).split("\n")
+        line = lines.pop()
+        lines.forEach((l) => log(l))
     }
+
+    const io = {
+        stdout: byLine(console.log),
+        stderr: byLine(console.error),
+        liaout: send.lia,
+        liaerr: (text) => send.lia(`HTML: <pre style='color: red'>${text}</pre>`),
+        clearOut: true,
+        mplout: "target_@0"
+    }
+
+    await window.runPython(code, io)
 }
 
 setTimeout(run_exec, 500)
@@ -618,26 +835,13 @@ setTimeout(run_exec, 500)
 
 async function run_eval() {
     const code = "@'input"
+    let terminal = false
+
     const io = {
-        stdout: {
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                console.stream(string)
-                return buffer.length
-            }
-        },
-        stderr: {
-            write: (buffer) => {
-                const decoder = new TextDecoder()
-                const string = decoder.decode(buffer)
-                send.log("error", '', [string])
-                return buffer.length
-            }
-        },
+        stdout: (text) => console.stream(text),
+        stderr: (text) => send.log("error", '', [text]),
         liaout: send.lia,
         liaerr: (fullMessage, lineMessage, lines) => {
-            window.console.log(lines)
             let lineErrors = [[]]
             lines = lines || []
             for (const [i, line] of lines.entries()) {
@@ -663,23 +867,13 @@ async function run_eval() {
             send.handle("stop", () => reject(new Error("KeyboardInterrupt")))
         })
     }
-    let terminal = false
 
     await window.runPython(code, io)
 }
 
-if (window.pyodide_running) {
-    setTimeout(() => {
-        console.warn("Another process is running, wait until finished")
-    }, 500)
+setTimeout(run_eval, 500)
 
-    "LIA: stop"
-} else {
-    window.pyodide_running = true
-    setTimeout(run_eval, 500)
-
-    "LIA: wait"
-}
+"LIA: wait"
 </script>
 
 <div id="target_@0"></div>
